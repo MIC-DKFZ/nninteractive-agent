@@ -1,0 +1,321 @@
+{
+ "about": "nninteractive-agent benchmark: 13 public images, 34 targets. No data is shipped: prepare.py builds every image and reference from its original source. Tiers: E easy, M medium, H hard.",
+ "archives": {
+  "bamf_lung_fdg": {
+   "file": "lung-fdg-pet-ct.zip",
+   "url": "https://zenodo.org/api/records/13244892/files/lung-fdg-pet-ct.zip/content",
+   "md5": "ca277d2723474c4842f4ca3ec89eac67",
+   "bytes": 9722829,
+   "ranges": true
+  },
+  "hanseg": {
+   "file": "HaN-Seg.zip",
+   "url": "https://zenodo.org/api/records/7442914/files/HaN-Seg.zip/content",
+   "md5": "c3d3070de3034933a63031b73b9cf0fc",
+   "bytes": 4938848306,
+   "ranges": true
+  },
+  "hntsmrg": {
+   "file": "HNTSMRG24_train.zip",
+   "url": "https://zenodo.org/api/records/11199559/files/HNTSMRG24_train.zip/content",
+   "md5": "286cb39d2fe7723b446b2f6bd415f72a",
+   "bytes": 15015488068,
+   "ranges": true
+  },
+  "fedbca": {
+   "file": "FedBCa.rar",
+   "url": "https://zenodo.org/api/records/13622759/files/FedBCa.rar/content",
+   "md5": "350e81f66ed67413438eac544f1be70c",
+   "bytes": 1028171551,
+   "ranges": false
+  },
+  "tumseg": {
+   "file": "TumSeg database.zip",
+   "url": "https://erda.ku.dk/archives/ba4fcd9bfa0fb581d593297dd43d1fd1/TumSeg%20database.zip",
+   "bytes": 2215359430,
+   "ranges": true
+  },
+  "veela_train": {
+   "file": "VEELA Train Set.zip",
+   "manual": "Needs a free Synapse account. Log in at https://www.synapse.org, open the VEELA 2025 data (https://www.synapse.org/Synapse:syn65471967/wiki/), download 'VEELA Train Set.zip' (syn65472816)."
+  },
+  "dryad_ants": {
+   "file": "training.zip",
+   "sha256": "b01c95091581b99bee6fae92f2e80dd402c9ae0d1a50238eb63e2cd749d24425",
+   "bytes": 9323214894,
+   "manual": "Download 'training.zip' (9.3 GB) in a browser from https://doi.org/10.5061/dryad.qz612jmgv (Dryad blocks scripted downloads). If the browser saves it wrapped in doi_10_5061_dryad_qz612jmgv__v20231003.zip, that file works too."
+  }
+ },
+ "images": [
+  {
+   "id": "pediatric_ct",
+   "what": "a CT scan of a child",
+   "source": {
+    "name": "Pediatric-CT-SEG",
+    "url": "https://doi.org/10.7937/TCIA.X0H0-1706",
+    "license": "CC BY 4.0",
+    "case": "patient Pediatric-CT-SEG-BC9C164F; CT series and its RTSTRUCT"
+   },
+   "files": {
+    "ct": {"tcia": "1.3.6.1.4.1.14519.5.2.1.223799692926217092731222646237955571914"},
+    "rtstruct": {"tcia": "1.3.6.1.4.1.14519.5.2.1.244561131337363293033013140720496669926"}
+   },
+   "convert": {"kind": "dicom", "image": "ct"},
+   "targets": [
+    {"id": "t01_liver", "request": "the liver", "tier": "E", "reference": {"rtstruct": "rtstruct", "rois": ["Liver"]}},
+    {"id": "t02_spleen", "request": "the spleen", "tier": "E", "reference": {"rtstruct": "rtstruct", "rois": ["Spleen"]}},
+    {"id": "t03_right_kidney", "request": "the right kidney", "tier": "E", "reference": {"rtstruct": "rtstruct", "rois": ["Kidney Right"]}},
+    {"id": "t04_urinary_bladder", "request": "the urinary bladder", "tier": "E", "reference": {"rtstruct": "rtstruct", "rois": ["Bladder"]}},
+    {"id": "t05_heart", "request": "the heart", "tier": "E", "reference": {"rtstruct": "rtstruct", "rois": ["Heart"]}},
+    {"id": "t06_pancreas", "request": "the pancreas", "tier": "M", "reference": {"rtstruct": "rtstruct", "rois": ["Pancreas"]}},
+    {"id": "t07_gallbladder", "request": "the gallbladder", "tier": "M", "reference": {"rtstruct": "rtstruct", "rois": ["Gall Bladder"]}},
+    {"id": "t08_left_adrenal_gland", "request": "the left adrenal gland", "tier": "H", "reference": {"rtstruct": "rtstruct", "rois": ["Adrenal Left"]}}
+   ]
+  },
+  {
+   "id": "hcc_ct",
+   "what": "an abdominal CT scan of a patient with liver cancer",
+   "source": {
+    "name": "HCC-TACE-Seg",
+    "url": "https://doi.org/10.7937/TCIA.5FNA-0924",
+    "license": "CC BY 4.0",
+    "case": "patient HCC_070, study of 2003-10-20; CT series 'Recon 3: LIVER 2 PHASE (C/A/P)' and its SEG"
+   },
+   "files": {
+    "ct": {"tcia": "1.3.6.1.4.1.14519.5.2.1.1706.8374.136142978609094228680670121332"},
+    "seg": {"tcia": "1.2.276.0.7230010.3.1.3.8323329.1961.1600929040.245395"}
+   },
+   "convert": {"kind": "dicom", "image": "ct"},
+   "targets": [
+    {"id": "t01_liver", "request": "the liver", "tier": "E", "reference": {"seg": "seg", "segments": ["Liver", "Mass", "Portal vein"]},
+     "note": "the whole liver: parenchyma, tumour and intrahepatic portal vein"},
+    {"id": "t02_liver_tumor", "request": "the liver tumor", "tier": "M", "reference": {"seg": "seg", "segments": ["Mass"]}}
+   ]
+  },
+  {
+   "id": "adrenal_ct",
+   "what": "an abdominal CT scan",
+   "source": {
+    "name": "Adrenal-ACC-Ki67-Seg",
+    "url": "https://doi.org/10.7937/1FPG-VM46",
+    "license": "CC BY 4.0",
+    "case": "patient Adrenal_Ki67_Seg_022; CT series and its SEG"
+   },
+   "files": {
+    "ct": {"tcia": "1.3.6.1.4.1.14519.5.2.1.334401641989188774736762790752200613960"},
+    "seg": {"tcia": "1.3.6.1.4.1.14519.5.2.1.269154204390045947237146650417493320675"}
+   },
+   "convert": {"kind": "dicom", "image": "ct"},
+   "targets": [
+    {"id": "t01_adrenal_tumor", "request": "the tumor of the right adrenal gland", "tier": "M", "reference": {"seg": "seg", "segments": ["Mass"]}}
+   ]
+  },
+  {
+   "id": "lung_ct",
+   "what": "a chest CT scan",
+   "source": {
+    "name": "RIDER Lung CT",
+    "url": "https://doi.org/10.7937/K9/TCIA.2015.U1X8A5NR",
+    "license": "CC BY 4.0",
+    "case": "patient RIDER-2539508879, retest scan of 2006-11-17; CT series and the SEG RIDER-2539508879_20190220_RETEST (manual contour GTVp_retest_man)"
+   },
+   "files": {
+    "ct": {"tcia": "1.3.6.1.4.1.9328.50.1.215800995114148697334431058444392949526"},
+    "seg": {"tcia": "1.2.276.0.7230010.3.1.3.8323329.19578.1554842047.820136"}
+   },
+   "convert": {"kind": "dicom", "image": "ct"},
+   "targets": [
+    {"id": "t01_lung_tumor", "request": "the tumor in the right lung", "tier": "M", "reference": {"seg": "seg", "segments": ["GTVp_retest_man"]}}
+   ]
+  },
+  {
+   "id": "lung_pet",
+   "what": "an FDG-PET scan of a lung cancer patient (SUV)",
+   "source": {
+    "name": "ACRIN-NSCLC-FDG-PET, with lesion masks from the BAMF/AIMI annotations",
+    "url": "https://doi.org/10.7937/tcia.2019.30ilqfcl",
+    "license": "CC BY 3.0 (images), CC BY 4.0 (masks, https://doi.org/10.5281/zenodo.13244892)",
+    "case": "patient ACRIN-NSCLC-FDG-PET-092, study of 1959-12-04; PET AC series; AI mask ai_ACRIN-NSCLC-FDG-PET-092_19591204_0.seg.dcm, which a radiologist rated 5 of 5 without corrections"
+   },
+   "files": {
+    "pet": {"tcia": "1.3.6.1.4.1.14519.5.2.1.7009.2403.633519908925431799582429613163"},
+    "seg": {"archive": "bamf_lung_fdg", "member": "ai-segmentations-dcm/ai_ACRIN-NSCLC-FDG-PET-092_19591204_0.seg.dcm"}
+   },
+   "convert": {"kind": "dicom", "image": "pet", "suv": true},
+   "targets": [
+    {"id": "t01_tumor", "request": "the FDG-avid tumor in the center of the chest, at the right hilum", "tier": "H", "reference": {"seg": "seg", "segments": ["FDG-Avid Tumor"]}}
+   ]
+  },
+  {
+   "id": "headneck_mr",
+   "what": "a T1-weighted MRI of the head and neck",
+   "source": {
+    "name": "HaN-Seg",
+    "url": "https://doi.org/10.5281/zenodo.7442914",
+    "license": "CC BY-NC-ND 4.0",
+    "case": "case_01: the MR T1 image; the organ masks are drawn on the case's CT and moved onto the MR with a fixed rigid transform"
+   },
+   "files": {
+    "mr": {"archive": "hanseg", "member": "HaN-Seg/set_1/case_01/case_01_IMG_MR_T1.nrrd"},
+    "Bone_Mandible": {"archive": "hanseg", "member": "HaN-Seg/set_1/case_01/case_01_OAR_Bone_Mandible.seg.nrrd"},
+    "Brainstem": {"archive": "hanseg", "member": "HaN-Seg/set_1/case_01/case_01_OAR_Brainstem.seg.nrrd"},
+    "Parotid_L": {"archive": "hanseg", "member": "HaN-Seg/set_1/case_01/case_01_OAR_Parotid_L.seg.nrrd"},
+    "Glnd_Submand_R": {"archive": "hanseg", "member": "HaN-Seg/set_1/case_01/case_01_OAR_Glnd_Submand_R.seg.nrrd"},
+    "Glnd_Thyroid": {"archive": "hanseg", "member": "HaN-Seg/set_1/case_01/case_01_OAR_Glnd_Thyroid.seg.nrrd"},
+    "SpinalCord": {"archive": "hanseg", "member": "HaN-Seg/set_1/case_01/case_01_OAR_SpinalCord.seg.nrrd"},
+    "OpticNrv_L": {"archive": "hanseg", "member": "HaN-Seg/set_1/case_01/case_01_OAR_OpticNrv_L.seg.nrrd"}
+   },
+   "convert": {
+    "kind": "rigid_masks",
+    "image": "mr",
+    "transform": {
+     "about": "ITK Euler3DTransform from MR physical points to CT physical points (centre 0): rotation about x, y, z in rad, then translation in mm",
+     "parameters": [-0.0079159, -0.0023123, -0.0060401, -0.5746, 104.7901, -597.2178]
+    }
+   },
+   "targets": [
+    {"id": "t01_mandible", "request": "the mandible", "tier": "E", "reference": {"mask": "Bone_Mandible"}},
+    {"id": "t02_brainstem", "request": "the brainstem", "tier": "E", "reference": {"mask": "Brainstem"}},
+    {"id": "t03_left_parotid_gland", "request": "the left parotid gland", "tier": "M", "reference": {"mask": "Parotid_L"}},
+    {"id": "t04_right_submandibular_gland", "request": "the right submandibular gland", "tier": "M", "reference": {"mask": "Glnd_Submand_R"}},
+    {"id": "t05_thyroid_gland", "request": "the thyroid gland", "tier": "M", "reference": {"mask": "Glnd_Thyroid"}},
+    {"id": "t06_spinal_cord", "request": "the spinal cord", "tier": "M", "reference": {"mask": "SpinalCord"}},
+    {"id": "t07_left_optic_nerve", "request": "the left optic nerve", "tier": "H", "reference": {"mask": "OpticNrv_L"}}
+   ]
+  },
+  {
+   "id": "headneck_tumor_mr",
+   "what": "a T2-weighted MRI of the head and neck of a cancer patient",
+   "source": {
+    "name": "HNTS-MRG 2024",
+    "url": "https://doi.org/10.5281/zenodo.11199559",
+    "license": "CC BY-NC 4.0",
+    "case": "training case 113, pre-RT; mask value 1 (GTVp)"
+   },
+   "files": {
+    "image": {"archive": "hntsmrg", "member": "HNTSMRG24_train/113/preRT/113_preRT_T2.nii.gz"},
+    "mask": {"archive": "hntsmrg", "member": "HNTSMRG24_train/113/preRT/113_preRT_mask.nii.gz"}
+   },
+   "convert": {"kind": "nifti", "image": "image", "mask": "mask"},
+   "targets": [
+    {"id": "t01_primary_tumor", "request": "the primary tumor", "tier": "H", "reference": {"labels": [1]}}
+   ]
+  },
+  {
+   "id": "bladder_mr",
+   "what": "a pelvic MRI",
+   "source": {
+    "name": "FedBCa bladder cancer MRI",
+    "url": "https://doi.org/10.5281/zenodo.13622759",
+    "license": "CC BY 4.0",
+    "case": "Center3, case 02: T2WI and its annotation"
+   },
+   "files": {
+    "image": {"archive": "fedbca", "member": "Center3/Center3/T2WI/02.nii.gz"},
+    "mask": {"archive": "fedbca", "member": "Center3/Center3/Annotation/02.nii.gz"}
+   },
+   "convert": {"kind": "nifti", "image": "image", "mask": "mask"},
+   "targets": [
+    {"id": "t01_bladder_tumor", "request": "the urinary bladder tumor", "tier": "M", "reference": {"labels": [1]}}
+   ]
+  },
+  {
+   "id": "thigh_mr",
+   "what": "an MRI of a human thigh",
+   "source": {
+    "name": "Thigh and calf muscle MRI (Wohlfarth et al., MAGMA 2025)",
+    "url": "https://doi.org/10.6084/m9.figshare.31042489.v1",
+    "license": "CC BY 4.0, non-commercial use only",
+    "case": "subject 13, thigh: Dixon fat image and the muscle mask"
+   },
+   "files": {
+    "image": {"manual": "MRI_data/13/Thigh/Fat.nii.gz"},
+    "mask": {"manual": "MRI_data/13/Thigh/mask_muscles.nii.gz"}
+   },
+   "convert": {"kind": "nifti", "image": "image", "mask": "mask"},
+   "targets": [
+    {"id": "t01_rectus_femoris", "request": "the right rectus femoris muscle", "tier": "M", "reference": {"labels": [1]}},
+    {"id": "t02_sartorius", "request": "the right sartorius muscle", "tier": "M", "reference": {"labels": [5]}},
+    {"id": "t03_gracilis", "request": "the right gracilis muscle", "tier": "M", "reference": {"labels": [6]}},
+    {"id": "t04_vastus_lateralis", "request": "the right vastus lateralis muscle", "tier": "M", "reference": {"labels": [2]}}
+   ]
+  },
+  {
+   "id": "calf_mr",
+   "what": "an MRI of a human calf",
+   "source": {
+    "name": "Thigh and calf muscle MRI (Wohlfarth et al., MAGMA 2025)",
+    "url": "https://doi.org/10.6084/m9.figshare.31042489.v1",
+    "license": "CC BY 4.0, non-commercial use only",
+    "case": "subject 05, calf: Dixon fat image and the muscle mask"
+   },
+   "files": {
+    "image": {"manual": "MRI_data/05/Calf/Fat.nii.gz"},
+    "mask": {"manual": "MRI_data/05/Calf/mask_muscles.nii.gz"}
+   },
+   "convert": {"kind": "nifti", "image": "image", "mask": "mask"},
+   "targets": [
+    {"id": "t01_soleus", "request": "the right soleus muscle", "tier": "M", "reference": {"labels": [3]}},
+    {"id": "t02_tibialis_anterior", "request": "the right tibialis anterior muscle", "tier": "M", "reference": {"labels": [8]}},
+    {"id": "t03_medial_gastrocnemius", "request": "the right medial gastrocnemius muscle", "tier": "M", "reference": {"labels": [1]}}
+   ]
+  },
+  {
+   "id": "liver_vessels_ct",
+   "what": "a contrast-enhanced abdominal CT scan",
+   "source": {
+    "name": "VEELA 2025 (images from CHAOS)",
+    "url": "https://www.synapse.org/Synapse:syn65471967/wiki/",
+    "license": "CHAOS images CC BY-NC-SA 4.0; VEELA labels: see the challenge page",
+    "case": "training set 08: image, liver mask and vessel labels (1 hepatic veins, 2 portal veins)"
+   },
+   "files": {
+    "image": {"archive": "veela_train", "member": "set08_norm.nii"},
+    "liver": {"archive": "veela_train", "member": "set08_mask.nii"},
+    "vessels": {"archive": "veela_train", "member": "set08_gt.nii"}
+   },
+   "convert": {"kind": "veela", "image": "image", "liver": "liver", "vessels": "vessels"},
+   "targets": [
+    {"id": "t01_liver", "request": "the liver", "tier": "E", "reference": {"liver_with_vessels": true},
+     "note": "the whole liver: the liver mask plus the vessel voxels next to it"},
+    {"id": "t02_portal_vein", "request": "the portal vein with all its branches", "tier": "M", "reference": {"vessels": [2]}},
+    {"id": "t03_hepatic_veins", "request": "the hepatic veins with all their branches", "tier": "H", "reference": {"vessels": [1]}}
+   ]
+  },
+  {
+   "id": "mouse_microct",
+   "what": "a micro-CT scan of a mouse",
+   "source": {
+    "name": "TumSeg: micro-CT of subcutaneous tumours in mice (Jensen et al., Sci Data 2024)",
+    "url": "https://doi.org/10.17894/UCPH.F7BCF864-BE18-4A16-95AD-6F22DEDB4265",
+    "license": "CC BY",
+    "case": "Dataset 9, mouse M03 at 0 h: CT and the STAPLE fusion of the three annotators"
+   },
+   "files": {
+    "image": {"archive": "tumseg", "member": "TumSeg database/Dataset 9/M03_M04_0h/M03_0h/CT_M03_0h.nii.gz"},
+    "mask": {"archive": "tumseg", "member": "TumSeg database/Dataset 9/M03_M04_0h/M03_0h/STAPLE_M03_0h.nii.gz"}
+   },
+   "convert": {"kind": "nifti", "image": "image", "mask": "mask"},
+   "targets": [
+    {"id": "t01_tumor", "request": "the subcutaneous tumor", "tier": "M", "reference": {"labels": [1]}}
+   ]
+  },
+  {
+   "id": "ant_microct",
+   "what": "a micro-CT scan of an ant's head",
+   "source": {
+    "name": "Ant brains in micro-CT (Toulkeridou et al., Dryad 2023)",
+    "url": "https://doi.org/10.5061/dryad.qz612jmgv",
+    "license": "CC0 1.0",
+    "case": "Formica_rufa2: slices 1-230 of training/ (slice 101 is not in the release) and their brain masks"
+   },
+   "files": {
+    "stack": {"archive": "dryad_ants", "member": "training/", "prefix": "Formica_rufa2_"}
+   },
+   "convert": {"kind": "tiff_stack", "image": "stack", "name": "Formica_rufa2", "slices": [1, 230]},
+   "targets": [
+    {"id": "t01_brain", "request": "the brain", "tier": "M", "reference": {"mask": true}}
+   ]
+  }
+ ]
+}

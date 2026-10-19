@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>nnInteractive Agent</title>
+  <link rel="icon" href="static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="static/app.css">
+</head>
+<body class="login-body">
+  <form class="login-card" method="post" action="login">
+    <img src="static/favicon.svg" alt="" width="44" height="44">
+    <h1>nnInteractive <b>Agent</b></h1>
+    <p class="login-sub">Text-prompted interactive segmentation. Internal demonstrator.</p>
+    <label class="login-label" for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" autofocus required>
+    <div class="login-error" id="error" hidden></div>
+    <button type="submit" class="primary-btn">Sign in</button>
+  </form>
+  <script>
+    const e = new URLSearchParams(location.search).get('error')
+    if (e) {
+      const el = document.getElementById('error')
+      el.textContent = e === 'locked' ? 'Too many attempts. Wait five minutes and try again.' : 'Wrong password.'
+      el.hidden = false
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+[project]
+name = "nninteractive-agent"
+version = "0.1.0"
+description = "nnInteractive as a tool for AI agents: MCP server and skill for text-prompted segmentation (Codex, Claude Code, any MCP client), plus a web demo"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Fabian Isensee", email = "f.isensee@dkfz-heidelberg.de" }]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "scikit-image",
+    "matplotlib",
+    "pillow",
+    "SimpleITK",
+    "tifffile",
+    # Torch-free remote client for nninteractive-server.
+    "nninteractive-client>=2.6.0",
+    # The tool server (MCP) agents talk to.
+    "mcp>=2.3",
+]
+
+[project.urls]
+Homepage = "https://github.com/MIC-DKFZ/nninteractive-agent"
+nnInteractive = "https://github.com/MIC-DKFZ/nnInteractive"
+
+[project.optional-dependencies]
+# Inference on this machine instead of an nninteractive-server (pulls PyTorch + nnU-Net).
+local = ["nnInteractive>=2.6.0"]
+# Browser demo (nninteractive-agent-web).
+web = ["claude-agent-sdk>=0.2.165", "fastapi", "uvicorn[standard]", "python-multipart", "cryptography"]
+# Building the benchmark from its sources (benchmark/prepare.py): DICOM.
+benchmark = ["pydicom>=2.4"]
+dev = ["pytest", "ruff", "black"]
+
+[project.scripts]
+nninteractive-agent = "nninteractive_agent.cli:main"
+nninteractive-agent-mcp = "nninteractive_agent.mcp_server:main"
+nninteractive-agent-web = "nninteractive_agent.web.server:main"
+
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+nninteractive_agent = ["claude_plugin/**/*", "claude_plugin/.claude-plugin/*", "claude_plugin/.mcp.json", "web/static/**/*"]
+
+[tool.black]
+line-length = 110
+
+[tool.ruff]
+line-length = 110
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

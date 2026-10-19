@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>nnInteractive Agent</title>
+  <link rel="icon" href="static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="static/favicon.svg" alt="" width="22" height="22">
+      <span>nnInteractive <b>Agent</b></span>
+    </div>
+    <div class="image-chip" id="imageChip" hidden>
+      <span class="chip-title" id="imageTitle"></span>
+      <span class="chip-meta" id="imageMeta"></span>
+      <button class="link-btn" id="changeImageBtn">Change image</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="agent-chip" id="agentChip" title="The agent's LLM" data-icon="sparkle"><span id="agentChipLabel"></span></button>
+    <div class="server-chip" id="serverChip" title="nnInteractive backend">
+      <span class="dot" id="serverDot"></span><span id="serverLabel">connecting</span>
+    </div>
+    <div class="menu-wrap">
+      <button class="icon-btn" id="settingsBtn" title="Agent settings" aria-haspopup="true" data-icon="sliders"></button>
+      <div class="popover" id="settingsPop" hidden>
+        <div class="pop-title">Agent</div>
+        <p class="pop-sub" id="agentLabel" hidden></p>
+        <label class="field">Model
+          <div class="seg" id="modelSeg"></div>
+        </label>
+        <label class="field">Effort
+          <div class="seg" id="effortSeg"></div>
+        </label>
+        <p class="pop-note">Changing these starts a new conversation. Objects are kept.</p>
+      </div>
+    </div>
+    <form method="post" action="logout"><button class="icon-btn" title="Log out" data-icon="logout"></button></form>
+  </header>
+
+  <main class="app" id="app">
+    <section class="stage" id="stage">
+      <div class="gallery" id="gallery">
+        <div class="gallery-inner">
+          <div class="gallery-head">
+            <h1>Choose an image</h1>
+            <p>Pick an example or upload your own volume, then tell the agent what to segment. It prompts
+              nnInteractive with scribbles and boxes, checks its own results and corrects them.</p>
+          </div>
+          <div class="cards" id="cards"></div>
+          <p class="gallery-foot">Only use public or fully anonymized images: the agent's views of the image are sent to the provider of its LLM.</p>
+          <button class="link-btn" id="backToImageBtn" hidden>Back to the current image</button>
+        </div>
+      </div>
+
+      <div class="viewer" id="viewer" hidden>
+        <div class="viewer-bar">
+          <div class="seg seg-icons" id="layoutSeg" title="Layout (keys 1-5)">
+            <button data-value="grid" title="Grid (1)">Grid</button>
+            <button data-value="axial" title="Large axial view (2)">Axial</button>
+            <button data-value="coronal" title="Large coronal view (3)">Coronal</button>
+            <button data-value="sagittal" title="Large sagittal view (4)">Sagittal</button>
+            <button data-value="3d" title="Large 3D view (5)">3D</button>
+          </div>
+          <div class="seg seg-tools" id="toolSeg" title="What dragging with the left mouse button does">
+            <button data-value="navigate" title="Navigate (C): click or drag moves the crosshair"><span data-icon="target"></span><span class="lbl">Navigate</span></button>
+            <button data-value="window" title="Window/level (W): drag up/down for brightness, left/right for contrast. Right-drag does this with any tool."><span data-icon="contrast"></span><span class="lbl">Window</span></button>
+            <button data-value="scroll" title="Scroll (S): drag up/down through the slices. The mouse wheel does this with any tool."><span data-icon="stack"></span><span class="lbl">Scroll</span></button>
+            <button data-value="pan" title="Pan (P): drag the image. Middle-drag or Shift + drag does this with any tool."><span data-icon="move"></span><span class="lbl">Pan</span></button>
+            <button data-value="zoom" title="Zoom (Z): drag up to zoom in, down to zoom out. Ctrl + wheel or a pinch does this with any tool."><span data-icon="zoom"></span><span class="lbl">Zoom</span></button>
+          </div>
+          <div class="spacer"></div>
+          <div class="menu-wrap">
+            <button class="ghost-btn" id="controlsBtn" title="Mouse controls"><span data-icon="info"></span>Controls</button>
+            <div class="popover controls-pop" id="controlsPop" hidden>
+              <div class="pop-title">Mouse controls</div>
+              <table class="keys">
+                <tr><th colspan="2">Left mouse button: the selected tool</th></tr>
+                <tr><td>Navigate (C)</td><td>Click or drag moves the crosshair</td></tr>
+                <tr><td>Window (W)</td><td>Drag up/down: brightness, left/right: contrast</td></tr>
+                <tr><td>Scroll (S)</td><td>Drag up/down through the slices</td></tr>
+                <tr><td>Pan (P)</td><td>Drag the image</td></tr>
+                <tr><td>Zoom (Z)</td><td>Drag up to zoom in, down to zoom out</td></tr>
+                <tr><td>Click</td><td>Moves the crosshair with every tool</td></tr>
+                <tr><th colspan="2">Always</th></tr>
+                <tr><td>Wheel, ↑ / ↓</td><td>Next / previous slice</td></tr>
+                <tr><td>Ctrl + wheel, pinch</td><td>Zoom at the pointer (⌘ on a Mac)</td></tr>
+                <tr><td>Right-drag</td><td>Window / level</td></tr>
+                <tr><td>Middle-drag, Shift + drag</td><td>Pan</td></tr>
+                <tr><td>Double-click</td><td>Enlarge this view / back to the grid</td></tr>
+                <tr><td>R</td><td>Reset zoom, pan and window</td></tr>
+                <tr><td>1 to 5</td><td>Grid, axial, coronal, sagittal, 3D</td></tr>
+                <tr><th colspan="2">3D view</th></tr>
+                <tr><td>Drag</td><td>Rotate</td></tr>
+                <tr><td>Right-, middle- or Shift-drag</td><td>Pan</td></tr>
+                <tr><td>Wheel</td><td>Zoom at the pointer</td></tr>
+              </table>
+              <p class="pop-note">A trackpad has no middle button: use the toolbar or Shift + drag to pan.</p>
+            </div>
+          </div>
+          <label class="toggle" title="Move the slices to where the agent is working">
+            <input type="checkbox" id="followToggle" checked><span class="track"></span><span>Follow agent</span>
+          </label>
+        </div>
+        <div class="viewport" id="viewport">
+          <div class="pane pane2d"><canvas id="canvas2d"></canvas></div>
+          <div class="pane pane3d" id="pane3d"><canvas id="canvas3d"></canvas></div>
+          <div class="tile-labels" id="tileLabels"></div>
+          <div class="loading" id="loading" hidden>
+            <div class="loading-card">
+              <div class="spinner"></div>
+              <div class="loading-text" id="loadingText">Loading</div>
+              <div class="progress"><div class="bar" id="loadingBar"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="viewer-foot">
+          <div class="controls">
+            <label class="ctl">Window <select id="windowSel"></select></label>
+            <label class="ctl">Objects <select id="overlaySel">
+              <option value="fill">Filled</option><option value="outline">Outlines</option><option value="off">Hidden</option>
+            </select></label>
+            <label class="ctl ctl-3d">3D <select id="volume3dSel"></select></label>
+            <label class="ctl ctl-3d" title="Surface opacity">Surfaces <input type="range" id="surfaceOpacity" min="0.15" max="1" step="0.05" value="1"></label>
+            <button class="ghost-btn" id="resetViewBtn" title="Reset zoom, pan, window and the 3D view (R)">Reset view</button>
+          </div>
+          <div class="readout">
+            <span id="readout" class="mono">Click into the image to inspect a voxel</span>
+            <button class="ghost-btn" id="mentionBtn" title="Insert this voxel into your message" disabled><span data-icon="pin"></span>Mention location</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="splitter" id="splitter" title="Drag to resize"></div>
+
+    <aside class="side" id="side">
+      <section class="panel objects-panel" id="objectsPanel">
+        <div class="panel-head">
+          <span class="panel-title">Objects <span class="count" id="objCount">0</span></span>
+          <div class="spacer"></div>
+          <button class="ghost-btn" id="downloadBtn" title="Download the segmentation (NIfTI + objects.json)" disabled><span data-icon="download"></span>Download</button>
+        </div>
+        <div class="objects" id="objects">
+          <div class="empty" id="objectsEmpty">No objects yet.</div>
+        </div>
+      </section>
+
+      <section class="panel chat-panel">
+        <div class="panel-head">
+          <span class="panel-title">Conversation</span>
+          <div class="spacer"></div>
+          <button class="ghost-btn" id="newConvBtn" title="Start a new conversation (objects are kept)"><span data-icon="plus"></span>New</button>
+        </div>
+        <div class="chat" id="chat">
+          <div class="chat-empty" id="chatEmpty">
+            <div class="chat-empty-icon" data-icon="sparkle"></div>
+            <p>Open an image, then describe what to segment.</p>
+          </div>
+        </div>
+        <div class="statusline" id="statusline" hidden>
+          <div class="pulse"></div><span id="statusText"></span><span class="elapsed mono" id="elapsed"></span>
+        </div>
+        <div class="composer">
+          <div class="suggestions" id="suggestions"></div>
+          <div class="composer-box">
+            <textarea id="input" rows="1" placeholder="Describe what to segment ..." disabled></textarea>
+            <button class="send-btn" id="sendBtn" title="Send (Enter)" disabled data-icon="send"></button>
+          </div>
+          <div class="composer-hint">Enter to send, Shift+Enter for a new line</div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <div class="lightbox" id="lightbox" hidden>
+    <button class="lb-close icon-btn" id="lbClose" data-icon="x" title="Close (Esc)"></button>
+    <button class="lb-nav lb-prev icon-btn" id="lbPrev" data-icon="chevronLeft" title="Previous"></button>
+    <figure><img id="lbImg" alt=""><figcaption id="lbCap"></figcaption></figure>
+    <button class="lb-nav lb-next icon-btn" id="lbNext" data-icon="chevronRight" title="Next"></button>
+  </div>
+  <div class="toasts" id="toasts"></div>
+  <!-- Live window/level preview: remaps the gray values of the drawn slices (see viewer.js). -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="wlFilter" color-interpolation-filters="sRGB">
+      <feComponentTransfer><feFuncR type="table"/><feFuncG type="table"/><feFuncB type="table"/></feComponentTransfer>
+    </filter>
+  </svg>
+
+  <script type="module" src="static/app.js"></script>
+</body>
+</html>

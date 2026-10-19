@@ -1,0 +1,268 @@
+{
+ "pediatric_ct": {
+  "shape": [
+   352,
+   512,
+   512
+  ],
+  "sha256": "11dda8e132524089",
+  "targets": {
+   "t01_liver": {
+    "voxels": 1423828,
+    "sha256": "e30360ad51b04ca6"
+   },
+   "t02_spleen": {
+    "voxels": 365324,
+    "sha256": "3000a8b5c04186ab"
+   },
+   "t03_right_kidney": {
+    "voxels": 133291,
+    "sha256": "edcb487d976dd159"
+   },
+   "t04_urinary_bladder": {
+    "voxels": 102868,
+    "sha256": "63a5d7ff366afe31"
+   },
+   "t05_heart": {
+    "voxels": 538622,
+    "sha256": "a412dac1b1de830d"
+   },
+   "t06_pancreas": {
+    "voxels": 36706,
+    "sha256": "63d1e2507897fdc8"
+   },
+   "t07_gallbladder": {
+    "voxels": 33140,
+    "sha256": "db0cfb198e8f5f41"
+   },
+   "t08_left_adrenal_gland": {
+    "voxels": 4615,
+    "sha256": "3be9d49946ba550a"
+   }
+  }
+ },
+ "hcc_ct": {
+  "shape": [
+   77,
+   512,
+   512
+  ],
+  "sha256": "e00b351d93d4fded",
+  "targets": {
+   "t01_liver": {
+    "voxels": 1647770,
+    "sha256": "102286a6ea907a2e"
+   },
+   "t02_liver_tumor": {
+    "voxels": 720141,
+    "sha256": "5fe34aeace3e7fc0"
+   }
+  }
+ },
+ "adrenal_ct": {
+  "shape": [
+   100,
+   512,
+   512
+  ],
+  "sha256": "d26462726a5e1123",
+  "targets": {
+   "t01_adrenal_tumor": {
+    "voxels": 228575,
+    "sha256": "d00e8d6ae4384a9d"
+   }
+  }
+ },
+ "lung_ct": {
+  "shape": [
+   261,
+   512,
+   512
+  ],
+  "sha256": "3f4c983d95186956",
+  "targets": {
+   "t01_lung_tumor": {
+    "voxels": 16744,
+    "sha256": "8956933c1d2bb529"
+   }
+  }
+ },
+ "lung_pet": {
+  "shape": [
+   239,
+   128,
+   128
+  ],
+  "sha256": "e729d257b4425a7a",
+  "targets": {
+   "t01_tumor": {
+    "voxels": 2948,
+    "sha256": "9744e7c8184cd1e5"
+   }
+  }
+ },
+ "headneck_mr": {
+  "shape": [
+   83,
+   512,
+   512
+  ],
+  "sha256": "0a15544ce8014a89",
+  "targets": {
+   "t01_mandible": {
+    "voxels": 55413,
+    "sha256": "54dc24d3f4fd9f1d"
+   },
+   "t02_brainstem": {
+    "voxels": 19701,
+    "sha256": "e16c9c947f8decbc"
+   },
+   "t03_left_parotid_gland": {
+    "voxels": 13446,
+    "sha256": "14a1deb7898a57c9"
+   },
+   "t04_right_submandibular_gland": {
+    "voxels": 6961,
+    "sha256": "ccaedcf74261566a"
+   },
+   "t05_thyroid_gland": {
+    "voxels": 9136,
+    "sha256": "eecdfd6835e7bbaa"
+   },
+   "t06_spinal_cord": {
+    "voxels": 8394,
+    "sha256": "17613e32475cbf49"
+   },
+   "t07_left_optic_nerve": {
+    "voxels": 279,
+    "sha256": "90bee61ff07a30ec"
+   }
+  }
+ },
+ "headneck_tumor_mr": {
+  "shape": [
+   75,
+   512,
+   512
+  ],
+  "sha256": "86e0fd7e50bb2b30",
+  "targets": {
+   "t01_primary_tumor": {
+    "voxels": 82117,
+    "sha256": "b615b011b9ae0cc0"
+   }
+  }
+ },
+ "bladder_mr": {
+  "shape": [
+   24,
+   512,
+   512
+  ],
+  "sha256": "4e425e7e0e68e58c",
+  "targets": {
+   "t01_bladder_tumor": {
+    "voxels": 2658,
+    "sha256": "e7a605393c4cf71c"
+   }
+  }
+ },
+ "thigh_mr": {
+  "shape": [
+   58,
+   288,
+   384
+  ],
+  "sha256": "140253f34fa796f6",
+  "targets": {
+   "t01_rectus_femoris": {
+    "voxels": 30632,
+    "sha256": "a84c44599276197b"
+   },
+   "t02_sartorius": {
+    "voxels": 20464,
+    "sha256": "f090af60a73c6f7f"
+   },
+   "t03_gracilis": {
+    "voxels": 14521,
+    "sha256": "6a3299b26955f9bc"
+   },
+   "t04_vastus_lateralis": {
+    "voxels": 116774,
+    "sha256": "c6bef4233b4184e3"
+   }
+  }
+ },
+ "calf_mr": {
+  "shape": [
+   46,
+   288,
+   384
+  ],
+  "sha256": "c79cd53d4fe6a61b",
+  "targets": {
+   "t01_soleus": {
+    "voxels": 86227,
+    "sha256": "fd2c70d321ec70ae"
+   },
+   "t02_tibialis_anterior": {
+    "voxels": 25380,
+    "sha256": "ed667c901a70fe6e"
+   },
+   "t03_medial_gastrocnemius": {
+    "voxels": 21662,
+    "sha256": "ba23c7a52e623694"
+   }
+  }
+ },
+ "liver_vessels_ct": {
+  "shape": [
+   123,
+   512,
+   512
+  ],
+  "sha256": "a0a74b68013f1b95",
+  "targets": {
+   "t01_liver": {
+    "voxels": 1895099,
+    "sha256": "dffb3abcf55d98ce"
+   },
+   "t02_portal_vein": {
+    "voxels": 43385,
+    "sha256": "478a06ecd0f339c4"
+   },
+   "t03_hepatic_veins": {
+    "voxels": 84160,
+    "sha256": "ceb608f801476c41"
+   }
+  }
+ },
+ "mouse_microct": {
+  "shape": [
+   480,
+   192,
+   192
+  ],
+  "sha256": "2c8411fc6b508d2a",
+  "targets": {
+   "t01_tumor": {
+    "voxels": 20745,
+    "sha256": "2297c7daff299350"
+   }
+  }
+ },
+ "ant_microct": {
+  "shape": [
+   229,
+   520,
+   520
+  ],
+  "sha256": "88ced85a2db5d023",
+  "targets": {
+   "t01_brain": {
+    "voxels": 10955993,
+    "sha256": "751548a2647d9d49"
+   }
+  }
+ }
+}

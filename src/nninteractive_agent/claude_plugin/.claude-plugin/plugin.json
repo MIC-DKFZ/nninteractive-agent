@@ -1,0 +1,6 @@
+{
+  "name": "nninteractive",
+  "version": "0.1.0",
+  "description": "Agentic segmentation with nnInteractive: MCP tools (load, prompt, view, verify, save) and the nninteractive-segmentation skill.",
+  "author": { "name": "Fabian Isensee" }
+}
