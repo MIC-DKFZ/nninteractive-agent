@@ -205,6 +205,14 @@ may search the web. Claude Code and Codex take a few minutes per image, so a tra
 hour and uses your subscription or API key accordingly. Open models on vLLM can take ten times as
 long. `--max-minutes` stops an agent that runs too long.
 
+An agent run sends rendered views of the image (slices, montages, 3D renderings) to the agent's
+LLM provider. Check that the terms of each dataset allow this before you run an agent on it.
+HaN-Seg, HNTS-MRG, VEELA (CHAOS images) and the thigh and calf data are for non-commercial use, and
+some of them allow no derivatives or require share-alike: for these, at least make sure that the
+provider does not train on your conversations (the model-training setting of your Claude or ChatGPT
+account), and do not send feedback on these runs. The point, oracle and VoxTell tracks, and agents
+on an open model that you serve yourself, keep the images on your machine.
+
 nnInteractive runs on your machine with its official weights (`--server local`, the default). A
 server with another checkpoint gives other numbers: compare only runs on the same backend.
 
