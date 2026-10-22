@@ -16,14 +16,17 @@ What you get:
 - **A web demo** (optional): a browser page with 2D/3D views and a chat, to show the agent to
   people who have no agent set up.
 
-**How well it works:** on our [benchmark](benchmark/README.md#results) (13 public CT, MRI, PET and
-micro-CT images, 34 named targets, nnInteractive v1.0), Claude Code and Codex reach a mean Dice of
-0.77 to 0.82 in about three minutes per image. nnInteractive alone, with one click per target,
-reaches 0.65. When the agents are told where each target is, their prompts are almost as good as
-simulated prompts placed with the reference mask, at the same number of prompts.
+**How well it works:** on our [benchmark](benchmark/README.md#results) (14 public CT, MRI, PET and
+micro-CT images, 51 named targets, nnInteractive v1.0), Claude Code and Codex reach a mean Dice of
+0.81 to 0.85 (averaged per image) in about four minutes per image. nnInteractive alone, with one
+click per target, reaches 0.71. When the agents are told where each target is, their prompts are
+about as good as simulated prompts placed with the reference mask, at the same number of prompts.
 [VoxTell](https://github.com/MIC-DKFZ/VoxTell), a 3D model that segments from text alone, reaches
-0.63: it is better than the agents on standard radiology targets and fails on the leg muscles and
+0.54: it does well on standard radiology targets and fails on the leg muscles, the foot bones and
 the animals.
+
+**Technical report:** *nnInteractive Agent: General-Purpose AI Agents as 3D Image Annotators*,
+arXiv (link follows). It describes the tools and the skill and evaluates them on the benchmark.
 
 nnInteractive itself runs on your machine (a CUDA GPU is strongly recommended) or on an
 `nninteractive-server` on a GPU machine elsewhere.
@@ -163,8 +166,8 @@ claude --model Qwen/Qwen3.8-27B --effort medium
 Pick an effort the server accepts: vLLM with Qwen takes low, medium and xhigh, not high. Open
 models work, but they are slower and less precise. On a spleen CT (`spleen_10` of the Medical
 Segmentation Decathlon, nnInteractive v1.0 on the same machine), Qwen3.8-27B at medium effort
-reached Dice 0.93 with five prompts, but took 34 minutes; Claude Code and Codex need about three
-minutes per image in the [benchmark](benchmark/README.md#results), for 2.6 targets on average.
+reached Dice 0.93 with five prompts, but took 34 minutes; Claude Code and Codex need about four
+minutes per image in the [benchmark](benchmark/README.md#results), for 3.6 targets on average.
 Its first boxes are often too large, so do not tell it to skip verification.
 
 ## Web demo
@@ -402,7 +405,10 @@ The code is licensed under Apache-2.0 (see `LICENSE`). The nnInteractive model w
 inference downloads are licensed under **CC BY-NC-SA 4.0** (non-commercial). The vendored web
 libraries keep their own licenses (`src/nninteractive_agent/web/static/vendor/`).
 
-If you use this, please cite nnInteractive:
+If you use this, please cite the report and nnInteractive:
+
+> Isensee, F., Ulrich Harsy, C., Rokuss, M., Hamm, B., Vollmuth, P., & Maier-Hein, K. H. (2026).
+> nnInteractive Agent: General-Purpose AI Agents as 3D Image Annotators. arXiv (link follows).
 
 > Isensee, F.\*, Rokuss, M.\*, Krämer, L.\*, Dinkelacker, S., Ravindran, A., Stritzke, F., Hamm, B.,
 > Wald, T., Langenberg, M., Ulrich, C., Deissler, J., Floca, R., & Maier-Hein, K. (2025).

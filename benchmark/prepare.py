@@ -8,7 +8,7 @@ Options: ``--downloads DIR`` (default ``benchmark/downloads``) and ``--data DIR`
 ``benchmark/data``). Without image ids, every image in cases.json is processed.
 
 We ship no data. ``fetch`` downloads the open sources from where their authors publish them (TCIA,
-Zenodo, ERDA); for the zip archives it reads only the members it needs. Three sources need a
+Zenodo, ERDA, Hugging Face); for the zip archives it reads only the members it needs. Three sources need a
 person: put their files where ``status`` says (``<downloads>/_archives/`` for archives,
 ``<downloads>/<image>/`` for single files). ``build`` writes, per image::
 
@@ -53,23 +53,26 @@ class Missing(Exception):
 
 
 # ------------------------------------------------------------------------------------------ fetching
-def _download(url: str, dest: Path, md5: str | None = None) -> None:
+def _download(url: str, dest: Path, md5: str | None = None, sha256: str | None = None) -> None:
     tmp = dest.with_name(dest.name + ".part")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    h = hashlib.md5()
+    want = {k: v for k, v in (("md5", md5), ("sha256", sha256)) if v}
+    hashes = {k: hashlib.new(k) for k in want}
     with urllib.request.urlopen(url, timeout=600) as r, open(tmp, "wb") as f:
         total = int(r.headers.get("Content-Length") or 0)
         done, shown = 0, 0
         while chunk := r.read(1 << 22):
             f.write(chunk)
-            h.update(chunk)
+            for h in hashes.values():
+                h.update(chunk)
             done += len(chunk)
             if total > 1 << 28 and done - shown > total / 10:
                 shown = done
                 print(f"  {done / 1e9:.1f} of {total / 1e9:.1f} GB", flush=True)
-    if md5 and h.hexdigest() != md5:
-        tmp.unlink()
-        raise RuntimeError(f"{url}: md5 {h.hexdigest()} instead of {md5}")
+    for k, v in want.items():
+        if hashes[k].hexdigest() != v:
+            tmp.unlink()
+            raise RuntimeError(f"{url}: {k} {hashes[k].hexdigest()} instead of {v}")
     tmp.rename(dest)
 
 
@@ -259,7 +262,7 @@ def local_name(key: str, spec: dict) -> str:
         return spec["manual"].rsplit("/", 1)[-1]
     if "tcia" in spec or "prefix" in spec:
         return key  # a folder of DICOM files or slices
-    name = spec["member"].rsplit("/", 1)[-1]
+    name = (spec.get("member") or spec["url"]).rsplit("/", 1)[-1]
     return key + (".nii.gz" if name.endswith(".nii.gz") else Path(name).suffix)
 
 
@@ -269,7 +272,9 @@ def fetch_file(downloads: Path, image: str, key: str, spec: dict, fetch: bool) -
     if dest.exists() and (dest.is_file() or any(dest.iterdir())):
         return dest
     if "manual" in spec:
-        raise Missing(f"{spec['manual']} (from {IMAGES[image]['source']['url']}): copy it to {dest}")
+        src = IMAGES[image]["source"]
+        where = src["access"] if "access" in src else f"from {src['url']}"
+        raise Missing(f"{spec['manual']} ({where}): copy it to {dest}")
     if "tcia" in spec:
         if not fetch:
             raise Missing(f"TCIA series {spec['tcia']}: run `prepare.py fetch`")
@@ -283,6 +288,12 @@ def fetch_file(downloads: Path, image: str, key: str, spec: dict, fetch: bool) -
                     if not info.is_dir():
                         with zf.open(info) as src, open(dest / info.filename.rsplit("/", 1)[-1], "wb") as dst:
                             shutil.copyfileobj(src, dst)
+        return dest
+    if "url" in spec:  # a single file
+        if not fetch:
+            raise Missing(f"{spec['url'].rsplit('/', 1)[-1]}: run `prepare.py fetch` (downloads from {spec['url']})")
+        print(f"  {image}/{key}: {spec['url'].rsplit('/', 1)[-1]} ({spec.get('bytes', 0) / 1e9:.1f} GB)")
+        _download(spec["url"], dest, sha256=spec.get("sha256"))
         return dest
     kind, arch = _open_archive(downloads, spec["archive"], fetch)
     names = arch.namelist() if kind == "zip" else _rar_names(arch)
@@ -425,6 +436,21 @@ def _array_on(img, ref) -> np.ndarray:
     return sitk.GetArrayFromImage(img)
 
 
+def slicer_segments(seg, ref) -> dict:
+    """{segment name: bool array} of a 3D Slicer ``.seg.nrrd`` on the image grid. Slicer stores
+    segments as label values in one or more layers (a layer per vector component), so segments
+    in different layers may overlap."""
+    layers = _array_on(seg, ref)
+    if layers.ndim == 3:
+        layers = layers[..., None]
+    out, i = {}, 0
+    while seg.HasMetaDataKey(f"Segment{i}_Name"):
+        layer, value = (int(seg.GetMetaData(f"Segment{i}_{k}")) for k in ("Layer", "LabelValue"))
+        out[seg.GetMetaData(f"Segment{i}_Name")] = layers[..., layer] == value
+        i += 1
+    return out
+
+
 def convert(image: str, files: dict):
     """(image as a SimpleITK image, {target id: bool array}) for one benchmark image."""
     sitk = _sitk()
@@ -455,6 +481,14 @@ def convert(image: str, files: dict):
         img = sitk.ReadImage(str(files[conv["image"]]))
         lab = _array_on(sitk.ReadImage(str(files[conv["mask"]])), img)
         masks = {t["id"]: np.isin(lab, t["reference"]["labels"]) for t in targets}
+    elif kind == "slicer_seg":
+        img = sitk.ReadImage(str(files[conv["image"]]))
+        segs = slicer_segments(sitk.ReadImage(str(files[conv["seg"]])), img)
+        for t in targets:
+            name = t["reference"]["segment"]
+            if name not in segs:
+                raise RuntimeError(f"{files[conv['seg']].name}: no segment {name}")
+            masks[t["id"]] = segs[name]
     elif kind == "veela":
         from scipy import ndimage as ndi
 

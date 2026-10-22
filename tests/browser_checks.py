@@ -7,6 +7,7 @@
     python tests/web_dev.py --gt --port 8781 &     # reference labels as objects, for 3D
     python tests/browser_checks.py render3d --gpu igpu --base http://127.0.0.1:8781/  # 3D frame times
     python tests/browser_checks.py no-webgl          # without WebGL2: an error message, no endless loading
+    python tests/browser_checks.py transparency      # semi-transparent surfaces behind the volume
 
 One-time setup: ``pip install playwright && python -m playwright install chromium``.
 ``--gpu``: ``soft`` (SwiftShader, slow but always works), ``igpu`` (Ryzen integrated GPU via
@@ -246,9 +247,30 @@ async def no_webgl(pg, out: Path) -> None:
         raise SystemExit(1)
 
 
+async def transparency(pg, out: Path) -> None:
+    """Semi-transparent surfaces (the uncommitted object; all of them with the opacity slider below 1)
+    must be hidden by the volume in front as much as opaque ones are: neither vanish behind a dense
+    volume nor sit on top of it. A synthetic scene (render3d_scene.js) on its own canvas."""
+    await pg.add_script_tag(path=str(Path(__file__).with_name("render3d_scene.js")), type="module")
+    await pg.wait_for_function("window.r3scene !== undefined", timeout=20000)
+    bad = 0
+    cases = [("sparse volume in front", 0.02, 1, "shaded"), ("dense volume in front", 0.12, 1, "shaded"),
+             ("dense, opacity slider 0.6", 0.12, 0.6, "shaded"), ("MIP", 0.3, 1, "mip")]  # fmt: skip
+    for label, alpha, opacity, mode in cases:
+        r = await pg.evaluate(f"r3scene.run({alpha}, {opacity}, '{mode}')")
+        ratio = r["current"] / max(r["committed"], 1e-6)
+        ok = 0.6 <= ratio <= 1.1  # the uncommitted object is drawn at 0.85 of the opacity
+        bad += not ok
+        print(f"{'OK' if ok else 'FAILED'}: {label}: visibility uncommitted {r['current']:.1f}, committed "
+              f"{r['committed']:.1f} (ratio {ratio:.2f}); without volume {r['bare']:.1f}")  # fmt: skip
+    await pg.screenshot(path=str(out / "transparency.png"), clip={"x": 0, "y": 0, "width": 400, "height": 400})  # fmt: skip
+    if bad:
+        raise SystemExit(1)
+
+
 CHECKS = {"controls": (controls, "Abdominal CT"), "window-under-load": (window_under_load, "Liver CT with tumors"),
           "rotate": (rotate, "Abdominal CT"), "render3d": (render3d, "Liver CT with tumors"),
-          "no-webgl": (no_webgl, "Abdominal CT")}  # fmt: skip
+          "no-webgl": (no_webgl, "Abdominal CT"), "transparency": (transparency, "Abdominal CT")}  # fmt: skip
 
 
 async def main() -> None:

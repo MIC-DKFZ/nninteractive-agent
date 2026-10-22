@@ -1,5 +1,5 @@
 {
- "about": "nninteractive-agent benchmark: 13 public images, 34 targets. No data is shipped: prepare.py builds every image and reference from its original source. Tiers: E easy, M medium, H hard.",
+ "about": "nninteractive-agent benchmark: 14 public images, 51 targets. No data is shipped: prepare.py builds every image and reference from its original source. Tiers: E easy, M medium, H hard.",
  "archives": {
   "bamf_lung_fdg": {
    "file": "lung-fdg-pet-ct.zip",
@@ -114,9 +114,9 @@
    "id": "lung_ct",
    "what": "a chest CT scan",
    "source": {
-    "name": "RIDER Lung CT",
+    "name": "RIDER Lung CT, with the tumour mask from RIDER-LungCT-Seg",
     "url": "https://doi.org/10.7937/K9/TCIA.2015.U1X8A5NR",
-    "license": "CC BY 4.0",
+    "license": "CC BY 4.0 (images), CC BY 3.0 (mask, https://doi.org/10.7937/tcia.2020.jit9grk8)",
     "case": "patient RIDER-2539508879, retest scan of 2006-11-17; CT series and the SEG RIDER-2539508879_20190220_RETEST (manual contour GTVp_retest_man)"
    },
    "files": {
@@ -225,8 +225,9 @@
    "source": {
     "name": "Thigh and calf muscle MRI (Wohlfarth et al., MAGMA 2025)",
     "url": "https://doi.org/10.6084/m9.figshare.31042489.v1",
-    "license": "CC BY 4.0, non-commercial use only",
-    "case": "subject 13, thigh: Dixon fat image and the muscle mask"
+    "license": "former figshare release: CC BY 4.0, non-commercial use only",
+    "case": "subject 13, thigh: Dixon fat image and the muscle mask",
+    "access": "on request from the authors (contact: https://github.com/VinceWohl/DL-Segmentation-of-Leg-Muscles); no longer in the figshare record"
    },
    "files": {
     "image": {"manual": "MRI_data/13/Thigh/Fat.nii.gz"},
@@ -246,8 +247,9 @@
    "source": {
     "name": "Thigh and calf muscle MRI (Wohlfarth et al., MAGMA 2025)",
     "url": "https://doi.org/10.6084/m9.figshare.31042489.v1",
-    "license": "CC BY 4.0, non-commercial use only",
-    "case": "subject 05, calf: Dixon fat image and the muscle mask"
+    "license": "former figshare release: CC BY 4.0, non-commercial use only",
+    "case": "subject 05, calf: Dixon fat image and the muscle mask",
+    "access": "on request from the authors (contact: https://github.com/VinceWohl/DL-Segmentation-of-Leg-Muscles); no longer in the figshare record"
    },
    "files": {
     "image": {"manual": "MRI_data/05/Calf/Fat.nii.gz"},
@@ -258,6 +260,42 @@
     {"id": "t01_soleus", "request": "the right soleus muscle", "tier": "M", "reference": {"labels": [3]}},
     {"id": "t02_tibialis_anterior", "request": "the right tibialis anterior muscle", "tier": "M", "reference": {"labels": [8]}},
     {"id": "t03_medial_gastrocnemius", "request": "the right medial gastrocnemius muscle", "tier": "M", "reference": {"labels": [1]}}
+   ]
+  },
+  {
+   "id": "foot_ct",
+   "what": "a whole-body CT scan (intensities are not in Hounsfield units: air is 0, soft tissue about 1000)",
+   "source": {
+    "name": "Visible Human Full-Skeleton 3D Bone Models (BoneHub, Hugging Face), on the aligned CT of the NLM Visible Human Female (University of Denver)",
+    "url": "https://doi.org/10.57967/hf/10464",
+    "license": "CC BY 4.0",
+    "case": "subject 02_Female (Hugging Face commit 7d520ff): the CT and the bones of the left foot from the 3D Slicer segmentation FOOT_LEFT.seg.nrrd"
+   },
+   "files": {
+    "ct": {"url": "https://huggingface.co/datasets/BoneHub/visible-human-3d-models/resolve/7d520ffe410b3f79d82991b8368b2d51844feb80/visible_human_3d_models/CT/Image/02_Female.nii.gz",
+           "sha256": "638c569c9a702a6c7b3f50e36fe4be8ef7acc2ab0c53d960ad19418d7f00d979", "bytes": 501395759},
+    "foot": {"url": "https://huggingface.co/datasets/BoneHub/visible-human-3d-models/resolve/7d520ffe410b3f79d82991b8368b2d51844feb80/visible_human_3d_models/CT/Segmentation/02_Female/FOOT_LEFT.seg.nrrd",
+             "sha256": "1fe34cff43db5869ae0109d6ba9ba32676d0b07963d03b074a52641c588fab94", "bytes": 1577621}
+   },
+   "convert": {"kind": "slicer_seg", "image": "ct", "seg": "foot"},
+   "targets": [
+    {"id": "t01_left_talus", "request": "the left talus", "tier": "E", "reference": {"segment": "TALUS_LEFT"}},
+    {"id": "t02_left_calcaneus", "request": "the left calcaneus", "tier": "E", "reference": {"segment": "CALCANEUS_LEFT"}},
+    {"id": "t03_left_navicular", "request": "the navicular bone of the left foot", "tier": "M", "reference": {"segment": "NAVICULAR_LEFT"}},
+    {"id": "t04_left_cuboid", "request": "the cuboid bone of the left foot", "tier": "M", "reference": {"segment": "CUBOID_LEFT"}},
+    {"id": "t05_left_medial_cuneiform", "request": "the medial cuneiform bone of the left foot", "tier": "M", "reference": {"segment": "MEDIAL_CUNEIFORM_LEFT"}},
+    {"id": "t06_left_intermediate_cuneiform", "request": "the intermediate cuneiform bone of the left foot", "tier": "H", "reference": {"segment": "INTERMEDIATE_CUNEIFORM_LEFT"}},
+    {"id": "t07_left_lateral_cuneiform", "request": "the lateral cuneiform bone of the left foot", "tier": "H", "reference": {"segment": "LATERAL_CUNEIFORM_LEFT"}},
+    {"id": "t08_left_metatarsal_1", "request": "the first metatarsal bone of the left foot", "tier": "M", "reference": {"segment": "METATARSAL_1_LEFT"}},
+    {"id": "t09_left_metatarsal_2", "request": "the second metatarsal bone of the left foot", "tier": "M", "reference": {"segment": "METATARSAL_2_LEFT"}},
+    {"id": "t10_left_metatarsal_3", "request": "the third metatarsal bone of the left foot", "tier": "M", "reference": {"segment": "METATARSAL_3_LEFT"}},
+    {"id": "t11_left_metatarsal_4", "request": "the fourth metatarsal bone of the left foot", "tier": "M", "reference": {"segment": "METATARSAL_4_LEFT"}},
+    {"id": "t12_left_metatarsal_5", "request": "the fifth metatarsal bone of the left foot", "tier": "M", "reference": {"segment": "METATARSAL_5_LEFT"}},
+    {"id": "t13_left_big_toe_phalanges", "request": "all phalanges of the left big toe, as one object", "tier": "M", "reference": {"segment": "PHALANGE_FOOT_1_LEFT"}},
+    {"id": "t14_left_toe_2_phalanges", "request": "all phalanges of the second toe of the left foot, as one object", "tier": "H", "reference": {"segment": "PHALANGE_FOOT_2_LEFT"}},
+    {"id": "t15_left_toe_3_phalanges", "request": "all phalanges of the third toe of the left foot, as one object", "tier": "H", "reference": {"segment": "PHALANGE_FOOT_3_LEFT"}},
+    {"id": "t16_left_toe_4_phalanges", "request": "all phalanges of the fourth toe of the left foot, as one object", "tier": "H", "reference": {"segment": "PHALANGE_FOOT_4_LEFT"}},
+    {"id": "t17_left_toe_5_phalanges", "request": "all phalanges of the fifth toe of the left foot, as one object", "tier": "H", "reference": {"segment": "PHALANGE_FOOT_5_LEFT"}}
    ]
   },
   {

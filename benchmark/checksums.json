@@ -215,6 +215,84 @@
    }
   }
  },
+ "foot_ct": {
+  "shape": [
+   1727,
+   670,
+   673
+  ],
+  "sha256": "d9cc873d99ad0fed",
+  "targets": {
+   "t01_left_talus": {
+    "voxels": 66520,
+    "sha256": "ba91121e6f344aa4"
+   },
+   "t02_left_calcaneus": {
+    "voxels": 129339,
+    "sha256": "0cbf921f77b06a50"
+   },
+   "t03_left_navicular": {
+    "voxels": 18354,
+    "sha256": "877c02529a9714fd"
+   },
+   "t04_left_cuboid": {
+    "voxels": 22748,
+    "sha256": "64c877ed03ecec29"
+   },
+   "t05_left_medial_cuneiform": {
+    "voxels": 16169,
+    "sha256": "18d02a73d99dac55"
+   },
+   "t06_left_intermediate_cuneiform": {
+    "voxels": 6933,
+    "sha256": "ac1acaf9f36f430f"
+   },
+   "t07_left_lateral_cuneiform": {
+    "voxels": 8907,
+    "sha256": "7865af49d30f4a20"
+   },
+   "t08_left_metatarsal_1": {
+    "voxels": 27943,
+    "sha256": "895920f5f9307b11"
+   },
+   "t09_left_metatarsal_2": {
+    "voxels": 13849,
+    "sha256": "998fa63c39313a6e"
+   },
+   "t10_left_metatarsal_3": {
+    "voxels": 11683,
+    "sha256": "d3ef09703171764a"
+   },
+   "t11_left_metatarsal_4": {
+    "voxels": 11555,
+    "sha256": "1abf09c6b7599bdf"
+   },
+   "t12_left_metatarsal_5": {
+    "voxels": 13281,
+    "sha256": "9adc41f21fd4886c"
+   },
+   "t13_left_big_toe_phalanges": {
+    "voxels": 16502,
+    "sha256": "eb74ec79cb0b60a0"
+   },
+   "t14_left_toe_2_phalanges": {
+    "voxels": 5619,
+    "sha256": "492ede56f0775225"
+   },
+   "t15_left_toe_3_phalanges": {
+    "voxels": 4035,
+    "sha256": "02a1af0fdf2fd718"
+   },
+   "t16_left_toe_4_phalanges": {
+    "voxels": 3422,
+    "sha256": "b7a39b6f83936064"
+   },
+   "t17_left_toe_5_phalanges": {
+    "voxels": 3711,
+    "sha256": "fc8807bf11690402"
+   }
+  }
+ },
  "liver_vessels_ct": {
   "shape": [
    123,

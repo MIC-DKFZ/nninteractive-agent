@@ -20,7 +20,7 @@ Tracks:
   knows the answer, at any number of prompts.
 - ``voxtell``: no agent. VoxTell, a text-promptable 3D segmentation model, with each target's request
   text as its prompt (all targets of an image in one call of VoxTell's CLI, which runs in its own
-  environment: ``--voxtell``).
+  environment: ``--voxtell``; ``--voxtell-group`` splits them over several calls, for less GPU memory).
 
 The agent is Claude Code (``claude -p``) with this package's plugin, or ``codex exec`` with the MCP
 server and the skill, configured for the run only (your own settings are not touched). The request
@@ -28,16 +28,21 @@ lists the targets in order and asks for each to be committed before the next; ea
 as its object was at its own last commit, so a later object that takes voxels from an earlier one
 (a tumour inside the liver) does not count against the earlier one. nnInteractive runs on this
 machine with the official weights unless ``--server`` names an nninteractive-server.
+``--no-image-info`` (agent tracks) tells the agent nothing about the image: the request says only
+"This is an image", and the agent works in a folder and on a link to the image whose names do not say
+what it shows (results in ``<config>-noinfo``).
 
 Each run gets ``<results>/<config>/<image>/rep<k>/`` with the request, the agent's transcript, its
 workspace (tool log, renders, saved masks) and ``score.json``. ``summary`` prints the mean Dice per
 configuration, per tier and per image (for the oracles also after each prompt), and writes
-``summary.json`` next to the runs.
+``summary.json`` next to the runs. Every mean is taken per image first: the mean over an image's
+targets, then the mean over images, so an image with many targets weighs as much as one with one.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
@@ -67,8 +72,8 @@ INSTRUCTIONS = (
 
 
 # ------------------------------------------------------------------------------------------- request
-def request(case: dict, image_path: Path, guided: bool) -> str:
-    lines = [f"This is {case['what']}: {image_path}."]
+def request(case: dict, image_path: Path, guided: bool, describe: bool = True) -> str:
+    lines = [f"This is {case['what'] if describe else 'an image'}: {image_path}."]
     if guided:
         lines.append("Segment each of the following structures as its own object, named exactly by its id. For each, a "
                      "voxel inside it is given ([axis0, axis1, axis2], the coordinates your tools use).")  # fmt: skip
@@ -163,7 +168,7 @@ def _finished_but_idle(transcript: Path, quiet_s: float = 90.0) -> bool:
 
 
 def run_agent(case: dict, image_path: Path, run_dir: Path, args) -> dict:
-    prompt = request(case, image_path, guided=args.track == "guided")
+    prompt = request(case, image_path, guided=args.track == "guided", describe=not args.no_image_info)
     (run_dir / "request.txt").write_text(prompt + "\n")
     env = {k: v for k, v in os.environ.items() if k not in ("CLAUDECODE", "CLAUDE_PID", "CLAUDE_EFFORT")
            and not k.startswith("CLAUDE_CODE_")}  # fmt: skip
@@ -271,13 +276,19 @@ def _commit_masks(ws: Path, masks: list) -> None:
 
 
 def run_voxtell(case: dict, image_path: Path, run_dir: Path, args) -> dict:
-    """VoxTell with each target's request text as its prompt, all targets of the image in one call."""
+    """VoxTell with each target's request text as its prompt, all targets of the image in one call, or
+    ``args.voxtell_group`` at a time. VoxTell keeps every prompt's output on the GPU (17 prompts on a
+    whole-body CT need about 25 GB). It decodes each prompt on its own (cross-attention to the image only,
+    none between prompts), so splitting changes only the numerics: the masks of an 8-target image changed
+    by less than 0.002 Dice."""
     out = run_dir / "voxtell"
     prompts = [t["request"] for t in case["targets"]]
-    cmd = [*shlex.split(args.voxtell), "-i", str(image_path), "-o", str(out), "-p", *prompts]
+    group = args.voxtell_group or len(prompts)
     t0 = time.time()
     with open(run_dir / "voxtell.log", "w") as log:
-        subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, check=True)
+        for i in range(0, len(prompts), group):
+            cmd = [*shlex.split(args.voxtell), "-i", str(image_path), "-o", str(out), "-p", *prompts[i : i + group]]
+            subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, check=True)
     stem = image_path.name.removesuffix(".gz").removesuffix(".nii")
     masks = []
     for t, prompt in zip(case["targets"], prompts):
@@ -287,7 +298,8 @@ def run_voxtell(case: dict, image_path: Path, run_dir: Path, args) -> dict:
             raise RuntimeError(f"VoxTell's mask {f.name} has shape {m.shape}, the image {tuple(case['shape'])}")
         masks.append((t["id"], m))
     _commit_masks(run_dir / "ws", masks)
-    return {"wall_s": round(time.time() - t0), "timeout": False, "prompts": 0, "text_prompts": prompts}
+    return {"wall_s": round(time.time() - t0), "timeout": False, "prompts": 0, "text_prompts": prompts,
+            "prompts_per_call": min(group, len(prompts))}
 
 
 # -------------------------------------------------------------------------------------------- scoring
@@ -455,6 +467,7 @@ def config_name(args) -> str:
         name = args.track + (f"-{args.prompts}" if args.track.startswith("oracle") and args.prompts != 5 else "")
     else:
         name = f"{args.track}-{args.agent}-{args.model.replace('/', '_')}-{args.effort}"
+        name += "-noinfo" if args.no_image_info else ""
     return name + (f"-{args.tag}" if args.tag else "")
 
 
@@ -476,6 +489,24 @@ def _versions(args) -> dict:
     return out
 
 
+def _neutral(out_root: Path, image: str, rep: int, image_path: Path) -> tuple[Path, Path]:
+    """``--no-image-info``: a working folder and a hard link to the image whose names say nothing about
+    the image (the agent sees both paths; ``<image>/rep<k>`` would name it)."""
+    folder = out_root / "_neutral" / hashlib.sha256(image.encode()).hexdigest()[:8]
+    folder.mkdir(parents=True, exist_ok=True)
+    link = folder / ("image" + "".join(image_path.suffixes))
+    if not link.exists():
+        try:
+            os.link(image_path, link)
+        except OSError:  # another file system
+            shutil.copy2(image_path, link)
+    work_dir = folder / f"rep{rep}"
+    if work_dir.exists():
+        shutil.rmtree(work_dir)
+    work_dir.mkdir()
+    return work_dir, link
+
+
 def run_one(image: str, rep: int, args, out_root: Path) -> dict:
     data_dir = args.data / image
     case = json.loads((data_dir / "case.json").read_text())
@@ -493,11 +524,20 @@ def run_one(image: str, rep: int, args, out_root: Path) -> dict:
             "started": time.strftime("%Y-%m-%d %H:%M:%S"), "data_checks": prepare.check(case) or "ok"}  # fmt: skip
     print(f"[{image} rep{rep}] running in {run_dir}", flush=True)
     image_path = (data_dir / case["image"]).resolve()
+    work_dir = run_dir
+    if agent and args.no_image_info:
+        work_dir, image_path = _neutral(out_root, image, rep, image_path)
+        meta["image_info"] = False
     runner = {"point": run_point, "voxtell": run_voxtell}.get(args.track, run_agent if agent else run_oracle)
     try:
-        meta.update(runner(case, image_path, run_dir, args))
+        meta.update(runner(case, image_path, work_dir, args))
     except Exception as e:  # noqa: BLE001 - a failed run is scored as what it saved (usually nothing)
         meta["error"] = f"{type(e).__name__}: {e}"
+    finally:
+        if work_dir != run_dir:  # everything back to where scoring and summary look
+            for p in work_dir.iterdir():
+                shutil.move(str(p), str(run_dir / p.name))
+            work_dir.rmdir()
     failure = agent_failure(run_dir) if agent else None
     if failure:
         meta["agent_failure"] = failure
@@ -514,6 +554,15 @@ def run_one(image: str, rep: int, args, out_root: Path) -> dict:
     print(f"[{image} rep{rep}] mean Dice {s['mean_dice']:.3f} over {len(s['targets'])} targets{miss}, "
           f"{meta.get('wall_s', 0)} s{limit}", flush=True)
     return s
+
+
+def wait_while_paused(pause_file: Path | None) -> None:
+    """``--pause-file``: before each run (and each retry), wait as long as that file exists."""
+    if pause_file and pause_file.exists():
+        print(f"paused: {pause_file} exists", flush=True)
+        while pause_file.exists():
+            time.sleep(60)
+        print("resumed", flush=True)
 
 
 def run(args) -> None:
@@ -534,12 +583,18 @@ def run(args) -> None:
     jobs = [(image, rep) for rep in range(1, args.repeats + 1) for image in images]
 
     def attempt(job):
+        tries = 0
         while True:
+            wait_while_paused(args.pause_file)
             try:
                 return run_one(*job, args, out_root)
             except AgentUnavailable as e:
                 if args.stop_on_limit:
                     raise
+                tries += 1
+                if args.max_retries is not None and tries > args.max_retries:
+                    print(f"[{job[0]} rep{job[1]}] gave up after {tries} failed attempts (not scored)", flush=True)
+                    return None
                 wait = retry_wait(str(e))
                 print(f"waiting {wait / 60:.0f} min before trying again", flush=True)
                 time.sleep(wait)
@@ -560,10 +615,19 @@ def run(args) -> None:
 
 
 # ------------------------------------------------------------------------------------------- summary
+def image_mean(values: dict) -> float:
+    """{(image, target): value} -> the mean over images of each image's mean over its targets."""
+    by_image = defaultdict(list)
+    for (image, _), v in values.items():
+        by_image[image].append(v)
+    return float(np.mean([np.mean(v) for v in by_image.values()]))
+
+
 def summary(dirs: list) -> None:
-    """Mean Dice per configuration: over all targets (averaged over repeats), per tier and per image.
-    The oracles also get their Dice after each prompt, and each agent configuration the oracles'
-    Dice at the agent's own number of prompts per target (when oracle results are among ``dirs``)."""
+    """Mean Dice per configuration (``image_mean`` of each target's Dice averaged over repeats), per tier
+    and per image, and the plain mean over targets. The oracles also get their Dice after each prompt,
+    and each agent configuration the oracles' Dice at the agent's own number of prompts per target
+    (when oracle results are among ``dirs``)."""
     configs = [d for root in dirs for d in ([root] if (root / "config.json").exists() else sorted(root.glob("*/")))
                if (d / "config.json").exists()]  # fmt: skip
     loaded = [(d, [json.loads(p.read_text()) for p in sorted(d.glob("*/rep*/score.json"))]) for d in configs]
@@ -581,46 +645,50 @@ def summary(dirs: list) -> None:
         if not scores:
             continue
         per_target = defaultdict(list)  # (image, target) -> Dice per repeat
-        tiers, per_rep, used = {}, defaultdict(list), defaultdict(list)
+        tiers, per_rep, used, sent = {}, defaultdict(dict), defaultdict(list), defaultdict(list)
         for s in scores:
+            sent[s["image"]].append((s.get("prompts") or 0) / max(len(s["targets"]), 1))  # all prompts of the run
             for t in s["targets"]:
                 per_target[(s["image"], t["id"])].append(t["dice"])
                 tiers[(s["image"], t["id"])] = t["tier"]
-                per_rep[s["rep"]].append(t["dice"])
+                per_rep[s["rep"]][(s["image"], t["id"])] = t["dice"]
                 used[(s["image"], t["id"])].append(t.get("prompts"))
         means = {k: float(np.mean(v)) for k, v in per_target.items()}
-        rep_means = [float(np.mean(v)) for v in per_rep.values()]
+        rep_means = [image_mean(v) for v in per_rep.values()]
         out = {
-            "config": cfg_dir.name, "runs": len(scores), "targets": len(means),
-            "mean_dice": round(float(np.mean(list(means.values()))), 4),
+            "config": cfg_dir.name, "runs": len(scores), "n_images": len({i for i, _ in means}), "targets": len(means),
+            "mean_dice": round(image_mean(means), 4),
+            "mean_dice_over_targets": round(float(np.mean(list(means.values()))), 4),
             "sd_over_repeats": round(float(np.std(rep_means)), 4) if len(rep_means) > 1 else None,
-            "tiers": {tier: round(float(np.mean([v for k, v in means.items() if tiers[k] == tier])), 4)
+            "tiers": {tier: round(image_mean({k: v for k, v in means.items() if tiers[k] == tier}), 4)
                       for tier in sorted(set(tiers.values()))},
             "images": {im: round(float(np.mean([v for (i, _), v in means.items() if i == im])), 4)
                        for im in sorted({i for i, _ in means})},
             "missing": sum(s["missing"] for s in scores), "timeouts": sum(bool(s.get("timeout")) for s in scores),
             "minutes_per_image": round(float(np.mean([s.get("wall_s", 0) for s in scores])) / 60, 1),
-            "prompts_per_target": round(sum(s.get("prompts") or 0 for s in scores) / max(sum(len(s["targets"]) for s in scores), 1), 1),
+            "prompts_per_target": round(float(np.mean([np.mean(v) for v in sent.values()])), 2),
+            "prompts_per_target_over_targets": round(sum(s.get("prompts") or 0 for s in scores) / max(sum(len(s["targets"]) for s in scores), 1), 2),
             "cost_usd": round(sum(s.get("cost_usd") or 0 for s in scores), 2) or None,
             "per_target": {f"{i}/{t}": round(v, 4) for (i, t), v in sorted(means.items())},
         }  # fmt: skip
         if cfg_dir.name in oracles:
             curves = oracles[cfg_dir.name]
             n = max(len(c) for c in curves.values())
-            out["dice_after_prompts"] = [round(float(np.mean([c[min(i, len(c) - 1)] for c in curves.values()])), 4)
+            out["dice_after_prompts"] = [round(image_mean({k: c[min(i, len(c) - 1)] for k, c in curves.items()}), 4)
                                          for i in range(n)]  # fmt: skip
         elif all(None not in v for v in used.values()):
             same = {}
             for name, curves in oracles.items():
                 if set(means) <= set(curves):
                     # Dice 0 for a target the agent never prompted (it has no object either)
-                    at = [np.mean([curves[k][min(n, len(curves[k])) - 1] if n else 0.0 for n in v]) for k, v in used.items()]
-                    same[name] = round(float(np.mean(at)), 4)
+                    at = {k: np.mean([curves[k][min(n, len(curves[k])) - 1] if n else 0.0 for n in v]) for k, v in used.items()}
+                    same[name] = round(image_mean(at), 4)
             if same:
                 out["oracle_same_prompts"] = same
         (cfg_dir / "summary.json").write_text(json.dumps(out, indent=1))
         sd = f" ± {out['sd_over_repeats']:.3f}" if out["sd_over_repeats"] is not None else ""
-        print(f"\n{out['config']}: mean Dice {out['mean_dice']:.3f}{sd} over {out['targets']} targets, {out['runs']} runs"
+        print(f"\n{out['config']}: mean Dice {out['mean_dice']:.3f}{sd} over {out['n_images']} images ({out['targets']} targets; "
+              f"over targets {out['mean_dice_over_targets']:.3f}), {out['runs']} runs"
               f" ({out['missing']} targets missing, {out['timeouts']} time limits), {out['minutes_per_image']} min per image, "
               f"{out['prompts_per_target']} prompts per target")  # fmt: skip
         print("  tiers: " + ", ".join(f"{k} {v:.3f}" for k, v in out["tiers"].items()))
@@ -647,7 +715,11 @@ def main() -> None:
     ap.add_argument("--prompts", type=int, default=5, help="oracle tracks: prompts per target")
     ap.add_argument("--voxtell", default="voxtell-predict", help="voxtell track: the command that runs VoxTell's "
                     "CLI, e.g. 'conda run -n voxtell voxtell-predict' (VoxTell needs its own environment)")  # fmt: skip
+    ap.add_argument("--voxtell-group", type=int, default=None, help="voxtell track: at most this many prompts per "
+                    "VoxTell call (default: all targets of an image in one call; fewer need less GPU memory)")  # fmt: skip
     ap.add_argument("--python", default="full", choices=("full", "guarded", "off"), help="the agent's python tool")
+    ap.add_argument("--no-image-info", action="store_true", help="agent tracks: say nothing about the image (no "
+                    "description; neutral folder and file names); results in <config>-noinfo")  # fmt: skip
     ap.add_argument("--images", nargs="*", default=None, help="image ids (default: all built images)")
     ap.add_argument("--repeats", type=int, default=1)
     ap.add_argument("--jobs", type=int, default=1, help="images in parallel (each loads nnInteractive when local)")
@@ -657,6 +729,10 @@ def main() -> None:
     ap.add_argument("--rerun", action="store_true", help="run again where a score exists")
     ap.add_argument("--stop-on-limit", action="store_true", help="stop when the agent hits a usage limit "
                     "(default: wait until the reset time the agent names, or 30 min, and go on)")  # fmt: skip
+    ap.add_argument("--pause-file", type=Path, default=None, help="wait before each run while this file exists "
+                    "(touch it to pause a long benchmark after the current image, remove it to go on)")  # fmt: skip
+    ap.add_argument("--max-retries", type=int, default=None, help="give up on an image after this many failed "
+                    "retries and go on with the next (it stays unscored; default: retry forever)")  # fmt: skip
     ap.add_argument("--data", type=Path, default=HERE / "data")
     ap.add_argument("--results", type=Path, default=HERE / "results")
     run(ap.parse_args())

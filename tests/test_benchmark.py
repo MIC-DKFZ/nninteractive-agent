@@ -47,6 +47,8 @@ def test_archive_members_and_local_names():
     assert prepare.local_name("mask", {"archive": "x", "member": "Center3/Annotation/02.nii.gz"}) == "mask.nii.gz"
     assert prepare.local_name("image", {"manual": "MRI_data/13/Thigh/Fat.nii.gz"}) == "Fat.nii.gz"
     assert prepare.local_name("ct", {"tcia": "1.2.3"}) == "ct"
+    assert prepare.local_name("ct", {"url": "https://host/x/CT/Image/02_Female.nii.gz"}) == "ct.nii.gz"
+    assert prepare.local_name("foot", {"url": "https://host/x/FOOT_LEFT.seg.nrrd"}) == "foot.nrrd"
 
 
 @pytest.mark.parametrize("stored", [True, False])
@@ -98,6 +100,31 @@ def test_build_writes_masks_hints_and_checksums(tmp_path, monkeypatch):
     _write(lab, tmp_path / "dl" / "mask.nii.gz")
     assert prepare.check(prepare.build("toy", files, tmp_path / "data")) == ["t01_a differs (281 voxels, expected 280)",
                                                                            "t02_ab differs (361 voxels, expected 360)"]  # fmt: skip
+
+
+def test_slicer_segments_in_layers(tmp_path, monkeypatch):
+    layers = np.zeros((6, 10, 12, 2), np.uint8)
+    layers[1:4, 2:5, 2:5, 0] = 1
+    layers[1:4, 2:5, 6:9, 0] = 2
+    layers[2:5, 3:6, 3:7, 1] = 1  # another layer: overlaps both
+    seg = sitk.GetImageFromArray(layers, isVector=True)
+    seg.SetSpacing((1.0, 1.0, 2.0))
+    for i, (name, layer, value) in enumerate([("A", 0, 1), ("B", 0, 2), ("C", 1, 1)]):
+        for k, v in (("Name", name), ("Layer", layer), ("LabelValue", value)):
+            seg.SetMetaData(f"Segment{i}_{k}", str(v))
+    sitk.WriteImage(seg, str(tmp_path / "foot.nrrd"))
+    _write(np.zeros(layers.shape[:3], np.float32), tmp_path / "ct.nii.gz")
+    spec = {"id": "toy", "what": "a toy image", "convert": {"kind": "slicer_seg", "image": "ct", "seg": "foot"},
+            "targets": [{"id": "t01_c", "request": "the c", "tier": "E", "reference": {"segment": "C"}},
+                        {"id": "t02_b", "request": "the b", "tier": "E", "reference": {"segment": "B"}}]}  # fmt: skip
+    monkeypatch.setitem(prepare.IMAGES, "toy", spec)
+    files = {"ct": tmp_path / "ct.nii.gz", "foot": tmp_path / "foot.nrrd"}
+    _, masks = prepare.convert("toy", files)
+    assert np.array_equal(masks["t01_c"], layers[..., 1] == 1) and np.array_equal(masks["t02_b"], layers[..., 0] == 2)
+    assert (masks["t01_c"] & masks["t02_b"]).any()  # each target is its segment as it is
+    spec["targets"].append({"id": "t03_d", "request": "the d", "tier": "E", "reference": {"segment": "D"}})
+    with pytest.raises(RuntimeError, match="no segment D"):
+        prepare.convert("toy", files)
 
 
 def test_request_lists_targets_in_order():
@@ -270,11 +297,79 @@ def test_voxtell_track_scores_each_prompt_as_its_target(tmp_path, monkeypatch):
         "    name = ''.join(c if c.isalnum() or c in (' ', '_') else '_' for c in prompt).replace(' ', '_')\n"
         "    sitk.WriteImage(out, os.path.join(o, 'image_' + name + '.nii.gz'))\n"
     )
-    args = argparse.Namespace(track="voxtell", voxtell=f"{sys.executable} {fake}", server="local", python="off",
-                              llm_url=None, data=tmp_path / "data", rerun=False, tag="")  # fmt: skip
+    args = argparse.Namespace(track="voxtell", voxtell=f"{sys.executable} {fake}", voxtell_group=None, server="local",
+                              python="off", llm_url=None, data=tmp_path / "data", rerun=False, tag="")  # fmt: skip
     out = tmp_path / "results" / bench_run.config_name(args)
     out.mkdir(parents=True)
-    s = bench_run.run_one("toy", 1, args, out)
-    organ, lesion = s["targets"]
-    assert out.name == "voxtell" and organ["dice"] == 1.0 and organ["source"] == "commit"
-    assert lesion["dice"] == 0.0 and s["text_prompts"] == ["the organ", "the lesion (inside)"]
+    for group in (None, 1):  # all prompts in one call, then one call per prompt
+        args.voxtell_group, args.rerun = group, group is not None
+        s = bench_run.run_one("toy", 1, args, out)
+        organ, lesion = s["targets"]
+        assert out.name == "voxtell" and organ["dice"] == 1.0 and organ["source"] == "commit"
+        assert lesion["dice"] == 0.0 and s["text_prompts"] == ["the organ", "the lesion (inside)"]
+        assert s["prompts_per_call"] == (group or 2)
+
+
+def test_no_image_info_hides_what_the_image_shows(tmp_path, monkeypatch):
+    import argparse
+
+    img = np.zeros((8, 30, 30), np.float32)
+    lab = np.zeros(img.shape, np.uint8)
+    lab[2:6, 5:20, 5:12] = 1
+    (tmp_path / "dl").mkdir()
+    _write(img, tmp_path / "dl" / "image.nii.gz")
+    _write(lab, tmp_path / "dl" / "mask.nii.gz")
+    spec = {"id": "toy_ct", "what": "a toy CT scan", "convert": {"kind": "nifti", "image": "image", "mask": "mask"},
+            "targets": [{"id": "t01_a", "request": "the a", "tier": "E", "reference": {"labels": [1]}}]}  # fmt: skip
+    monkeypatch.setitem(prepare.IMAGES, "toy_ct", spec)
+    monkeypatch.setattr(prepare, "CHECKSUMS", tmp_path / "checksums.json")
+    files = {"image": tmp_path / "dl" / "image.nii.gz", "mask": tmp_path / "dl" / "mask.nii.gz"}
+    prepare.build("toy_ct", files, tmp_path / "data")
+    seen = {}
+
+    def fake_agent(case, image_path, run_dir, args):  # what the agent would see: its request and its folder
+        seen.update(request=bench_run.request(case, image_path, False, describe=not args.no_image_info),
+                    image=str(image_path), cwd=str(run_dir))  # fmt: skip
+        (run_dir / "ws").mkdir()
+        return {"wall_s": 1, "timeout": False}
+
+    monkeypatch.setattr(bench_run, "run_agent", fake_agent)
+    monkeypatch.setattr(bench_run, "agent_failure", lambda run_dir: None)
+    monkeypatch.setattr(bench_run, "score", lambda run_dir, case, data_dir: {"targets": [], "missing": 0, "prompts": 0,
+                                                                            "mean_dice": 0.0})  # fmt: skip
+    args = argparse.Namespace(track="unguided", agent="claude", model="opus", effort="medium", no_image_info=True,
+                              server="local", python="full", llm_url=None, data=tmp_path / "data", rerun=False,
+                              tag="")  # fmt: skip
+    out = tmp_path / "results" / bench_run.config_name(args)
+    bench_run.run_one("toy_ct", 1, args, out)
+    assert out.name == "unguided-claude-opus-medium-noinfo"
+    assert seen["request"].startswith("This is an image: ") and "CT" not in seen["request"]
+    assert "toy" not in seen["image"].removeprefix(str(tmp_path)) and "toy" not in seen["cwd"].removeprefix(str(tmp_path))
+    assert (out / "toy_ct" / "rep1" / "ws").is_dir() and (out / "toy_ct" / "rep1" / "run.json").exists()
+    assert not Path(seen["cwd"]).exists()
+
+
+def test_pause_file_holds_the_next_run(tmp_path, monkeypatch):
+    pause = tmp_path / "PAUSE"
+    bench_run.wait_while_paused(None)
+    bench_run.wait_while_paused(pause)  # no file: returns at once
+    pause.touch()
+    naps = []
+    monkeypatch.setattr(bench_run.time, "sleep", lambda s: (naps.append(s), pause.unlink()))
+    bench_run.wait_while_paused(pause)
+    assert naps == [60] and not pause.exists()
+
+
+def test_summary_weighs_every_image_the_same(tmp_path):
+    cfg = tmp_path / "results" / "point"
+    cfg.mkdir(parents=True)
+    (cfg / "config.json").write_text("{}")
+    runs = {"many": [("t01", "E", 1.0), ("t02", "E", 1.0), ("t03", "H", 1.0)], "one": [("t01", "H", 0.0)]}
+    for image, targets in runs.items():
+        (cfg / image / "rep1").mkdir(parents=True)
+        rows = [{"id": i, "tier": tier, "dice": d, "prompts": 1} for i, tier, d in targets]
+        (cfg / image / "rep1" / "score.json").write_text(json.dumps({"image": image, "rep": 1, "targets": rows, "missing": 0}))
+    bench_run.summary([cfg])
+    out = json.loads((cfg / "summary.json").read_text())
+    assert out["mean_dice"] == 0.5 and out["mean_dice_over_targets"] == 0.75
+    assert out["tiers"] == {"E": 1.0, "H": 0.5} and out["n_images"] == 2 and out["targets"] == 4

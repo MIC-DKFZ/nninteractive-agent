@@ -1,10 +1,12 @@
 // The 3D view: volume rendering and object surfaces in one WebGL2 canvas, composited by depth.
 //
 // Each frame: (1) opaque surfaces are drawn with 4x MSAA into an offscreen colour + depth target;
-// (2) a full-screen ray caster marches through the volume from the eye up to the nearest surface
-// and composites the volume over the surface (so bone in front of an organ hides it, and the organ
-// hides what lies behind it), outlines the surfaces and writes the depth where the volume becomes
-// half opaque; (3) semi-transparent surfaces are drawn on top, depth-tested against that depth.
+// (2) semi-transparent surfaces (the object being edited, or all with the opacity slider below 1)
+// are blended into a second target, depth-tested against the opaque ones, keeping the depth of the
+// nearest; (3) a full-screen ray caster marches through the volume from the eye up to the nearest
+// opaque surface and composites the volume over the surfaces, the semi-transparent layer where the
+// ray reaches it (so bone in front of an organ hides it, and the organ hides what lies behind it),
+// and outlines the surfaces.
 //
 // World space is NIfTI RAS mm, the space of the surface vertices. The camera orbits a centre:
 // azimuth 180 / elevation 0 looks at the patient from the front (anterior), with the patient's
@@ -153,7 +155,7 @@ const COMPOSITE_FS = `#version 300 es
 precision highp float;
 precision highp sampler3D;
 in vec2 vNdc;
-uniform mat4 uInvViewProj, uViewProj;
+uniform mat4 uInvViewProj;
 uniform vec3 uEye;
 uniform mat4 uWorld2Tex;
 uniform mat3 uGradToWorld;
@@ -168,6 +170,8 @@ uniform highp sampler2D uPre; // running integrals of the transfer function over
                               // x extinction, a extinction)
 uniform float uPreN;
 uniform sampler2D uMeshColor, uMeshDepth;
+uniform sampler2D uLayerColor, uLayerDepth; // semi-transparent surfaces (premultiplied), their nearest depth
+uniform int uLayer;                         // 1: there are semi-transparent surfaces
 uniform vec2 uViewport;
 uniform vec3 uBgTop, uBgBottom;         // linear
 uniform vec3 uKeyW, uFillW;             // world space
@@ -223,11 +227,6 @@ float eyeDist(float d) { // depth buffer value -> distance along the view axis
   return 2.0 * uNearFar.x * uNearFar.y / (uNearFar.y + uNearFar.x - z * (uNearFar.y - uNearFar.x));
 }
 
-float ndcDepth(vec3 p) {
-  vec4 c = uViewProj * vec4(p, 1.0);
-  return clamp(c.z / c.w * 0.5 + 0.5, 0.0, 1.0);
-}
-
 void main() {
   vec2 uv = gl_FragCoord.xy / uViewport;
   vec4 a = uInvViewProj * vec4(vNdc, -1.0, 1.0);
@@ -259,8 +258,22 @@ void main() {
     behind = surf * mc.a + (1.0 - mc.a) * bg;
   }
 
+  // the semi-transparent surfaces in front of them: one layer, composited where the ray reaches
+  // the nearest of them, so the volume in front hides them as much as it hides opaque surfaces
+  vec4 lay = vec4(0.0);
+  float tLay = 1e9;
+  if (uLayer > 0) {
+    vec4 lc = texture(uLayerColor, uv);
+    float ld = texture(uLayerDepth, uv).r;
+    if (lc.a > 1e-3 && ld < 1.0) {
+      vec4 w = uInvViewProj * vec4(vNdc, ld * 2.0 - 1.0, 1.0);
+      tLay = dot(w.xyz / w.w - uEye, dir);
+      lay = vec4(toLin(lc.rgb / lc.a) * lc.a, lc.a);
+    }
+  }
+  bool layPending = lay.a > 0.0;
+
   vec4 acc = vec4(0.0);
-  float tHalf = -1.0;
   if (uMode > 0) {
     vec3 o = (uWorld2Tex * vec4(uEye, 1.0)).xyz;
     vec3 d = mat3(uWorld2Tex) * dir;
@@ -269,6 +282,7 @@ void main() {
     vec3 tmin = min(t0s, t1s), tmax = max(t0s, t1s);
     float t0 = max(max(max(tmin.x, tmin.y), tmin.z), 0.0);
     float t1 = min(min(min(tmax.x, tmax.y), tmax.z), tMesh);
+    if (layPending && tLay <= t0) { acc = lay; layPending = false; } // in front of the volume
     if (t1 > t0) {
       float stepMM = uStep / length(d / uTexel);
       float t = t0 + hash(gl_FragCoord.xy) * stepMM;
@@ -293,8 +307,9 @@ void main() {
         bool glass = uGlass.a > 0.0 && vPrev < uGlassIso.y;
         int empty = 0;
         bool last = false;
+        float tEnd = layPending ? min(tLay, t1) : t1; // first up to the layer, then on to t1
         for (int i = 0; i < ${MAX_STEPS}; i++) {
-          if (t >= t1) { t = t1; last = true; }
+          if (t >= tEnd) { t = tEnd; last = true; }
           vec3 p = o + d * t;
           float v = texture(uVol, p).r;
           float L = t - tPrev;
@@ -315,7 +330,14 @@ void main() {
           if (seg.a * L < 1e-5 * uRefLen) { // empty: after a few empty segments take longer ones
             vPrev = v;
             tPrev = t;
-            if (last) break;
+            if (last) {
+              if (!layPending || tEnd >= t1) break;
+              acc.rgb += (1.0 - acc.a) * lay.rgb;
+              acc.a += (1.0 - acc.a) * lay.a;
+              layPending = false;
+              tEnd = t1;
+              last = false;
+            }
             empty++;
             t += (empty > 4 ? 3.0 : 1.0) * stepMM;
             continue;
@@ -334,19 +356,30 @@ void main() {
           float alpha = 1.0 - exp(-seg.a * L / uRefLen);
           acc.rgb += (1.0 - acc.a) * alpha * col;
           acc.a += (1.0 - acc.a) * alpha;
-          if (tHalf < 0.0 && acc.a >= 0.5) tHalf = t;
           vPrev = v;
           tPrev = t;
-          if (acc.a > 0.985 || last) break;
+          if (acc.a > 0.985) break;
+          if (last) {
+            if (!layPending || tEnd >= t1) break;
+            acc.rgb += (1.0 - acc.a) * lay.rgb;
+            acc.a += (1.0 - acc.a) * lay.a;
+            layPending = false;
+            tEnd = t1;
+            last = false;
+            if (acc.a > 0.985) break;
+          }
           t += stepMM;
         }
       }
     }
   }
+  if (layPending && acc.a <= 0.985) { // behind the volume (or no volume): over what lies behind
+    acc.rgb += (1.0 - acc.a) * lay.rgb;
+    acc.a += (1.0 - acc.a) * lay.a;
+  }
   float x = md < 1.0 ? uXray * mc.a : 0.0;
   vec3 col = acc.rgb * (1.0 - x) + (1.0 - acc.a * (1.0 - x)) * behind;
   outColor = vec4(pow(max(col, 0.0), vec3(1.0 / 2.2)), 1.0);
-  gl_FragDepth = tHalf >= 0.0 ? ndcDepth(uEye + dir * tHalf) : md;
 }`
 
 function compile(gl, vs, fs) {
@@ -664,14 +697,31 @@ export class Render3D {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
       return t
     }
+    const fbo = (c, d) => {
+      const f = gl.createFramebuffer()
+      gl.bindFramebuffer(gl.FRAMEBUFFER, f)
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, c, 0)
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, d, 0)
+      return f
+    }
     const color = tex(gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE)
     const depth = tex(gl.DEPTH_COMPONENT24, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT)
-    const resolved = gl.createFramebuffer()
-    gl.bindFramebuffer(gl.FRAMEBUFFER, resolved)
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, color, 0)
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depth, 0)
+    const resolved = fbo(color, depth)
+    // the semi-transparent surfaces: their own colour, the opaque surfaces' depth buffer
+    const msLayerColor = rb(gl.RGBA8)
+    const msLayer = gl.createFramebuffer()
+    gl.bindFramebuffer(gl.FRAMEBUFFER, msLayer)
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, msLayerColor)
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, msDepth)
+    const layerColor = tex(gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE)
+    const layerDepth = tex(gl.DEPTH_COMPONENT24, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT)
+    const layerResolved = fbo(layerColor, layerDepth)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-    this.targets = { ms, resolved, color, depth, renderbuffers: [msColor, msDepth], textures: [color, depth], framebuffers: [ms, resolved] }
+    this.targets = {
+      ms, resolved, color, depth, msLayer, layerResolved, layerColor, layerDepth,
+      renderbuffers: [msColor, msDepth, msLayerColor], textures: [color, depth, layerColor, layerDepth],
+      framebuffers: [ms, resolved, msLayer, layerResolved],
+    }
   }
 
   /** Redraw at the next animation frame (calls within one frame are merged). */
@@ -724,12 +774,40 @@ export class Render3D {
     gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST)
     gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.DEPTH_BUFFER_BIT, gl.NEAREST)
 
-    // 2. volume over surfaces over background, to the canvas
+    // 2. semi-transparent surfaces in front of the opaque ones, farthest first, each with a depth
+    // pre-pass (no inner layers) -> one premultiplied layer + the depth of its nearest surface
+    if (transparent.length) {
+      const near = (m) => Math.hypot(...[0, 1, 2].map((a) => m.center[a] - cam.eye[a])) - m.radius
+      transparent.sort((a, b) => near(b[1]) - near(a[1]))
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.targets.msLayer)
+      gl.clear(gl.COLOR_BUFFER_BIT) // the depth buffer keeps the opaque surfaces
+      gl.enable(gl.DEPTH_TEST)
+      gl.depthFunc(gl.LEQUAL)
+      gl.enable(gl.CULL_FACE)
+      gl.cullFace(gl.BACK)
+      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
+      for (const item of transparent) {
+        gl.colorMask(false, false, false, false)
+        gl.depthMask(true)
+        gl.disable(gl.BLEND)
+        this._drawMeshes([item], cam, () => 1)
+        gl.colorMask(true, true, true, true)
+        gl.depthMask(false)
+        gl.enable(gl.BLEND)
+        this._drawMeshes([item], cam, opacityOf)
+      }
+      gl.depthMask(true)
+      gl.disable(gl.BLEND)
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.targets.msLayer)
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.targets.layerResolved)
+      gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST)
+      gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.DEPTH_BUFFER_BIT, gl.NEAREST)
+    }
+
+    // 3. volume over surfaces over background, to the canvas
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     gl.viewport(0, 0, w, h)
-    gl.enable(gl.DEPTH_TEST)
-    gl.depthFunc(gl.ALWAYS)
-    gl.depthMask(true)
+    gl.disable(gl.DEPTH_TEST)
     gl.disable(gl.BLEND)
     gl.disable(gl.CULL_FACE)
     const { prog, u } = this.compProg
@@ -737,7 +815,6 @@ export class Render3D {
     const vol = this.vol, pr = this.preset
     const mode = vol && pr ? (pr.mode === 'mip' ? 2 : 1) : 0
     gl.uniformMatrix4fv(u.uInvViewProj, false, invert(viewProj))
-    gl.uniformMatrix4fv(u.uViewProj, false, viewProj)
     gl.uniform3fv(u.uEye, cam.eye)
     gl.uniform1i(u.uMode, mode)
     gl.uniform2f(u.uViewport, w, h)
@@ -755,6 +832,13 @@ export class Render3D {
     gl.activeTexture(gl.TEXTURE1)
     gl.bindTexture(gl.TEXTURE_2D, this.targets.depth)
     gl.uniform1i(u.uMeshDepth, 1)
+    gl.activeTexture(gl.TEXTURE6)
+    gl.bindTexture(gl.TEXTURE_2D, this.targets.layerColor)
+    gl.uniform1i(u.uLayerColor, 6)
+    gl.activeTexture(gl.TEXTURE7)
+    gl.bindTexture(gl.TEXTURE_2D, this.targets.layerDepth)
+    gl.uniform1i(u.uLayerDepth, 7)
+    gl.uniform1i(u.uLayer, transparent.length ? 1 : 0)
     if (mode) {
       gl.activeTexture(gl.TEXTURE2)
       gl.bindTexture(gl.TEXTURE_3D, vol.tex)
@@ -796,28 +880,6 @@ export class Render3D {
     }
     gl.bindVertexArray(this.vao)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
-
-    // 3. semi-transparent surfaces, farthest first, each with a depth pre-pass (no inner layers)
-    if (transparent.length) {
-      const near = (m) => Math.hypot(...[0, 1, 2].map((a) => m.center[a] - cam.eye[a])) - m.radius
-      transparent.sort((a, b) => near(b[1]) - near(a[1]))
-      gl.enable(gl.CULL_FACE)
-      gl.cullFace(gl.BACK)
-      gl.depthFunc(gl.LEQUAL)
-      for (const item of transparent) {
-        gl.colorMask(false, false, false, false)
-        gl.depthMask(true)
-        gl.disable(gl.BLEND)
-        this._drawMeshes([item], cam, () => 1)
-        gl.colorMask(true, true, true, true)
-        gl.depthMask(false)
-        gl.enable(gl.BLEND)
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-        this._drawMeshes([item], cam, opacityOf)
-      }
-      gl.depthMask(true)
-      gl.disable(gl.BLEND)
-    }
     gl.bindVertexArray(null)
     performance.measure('nni-3d', 'nni-3d-start')
   }

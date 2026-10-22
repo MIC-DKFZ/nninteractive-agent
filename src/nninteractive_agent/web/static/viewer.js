@@ -3,6 +3,8 @@
 //
 // Workspace arrays are [axis0, axis1, axis2] = reversed NIfTI (i, j, k), so a crop of a workspace
 // array in C order is a contiguous run of NIfTI voxel order and can be copied straight into img.
+// NiiVue's own voxel coordinates index its RAS-reoriented copy: convert positions with coords.js.
+import { workspaceFrac, workspaceIndex } from './coords.js'
 import { Render3D } from './render3d.js'
 import { DRAG_MODE, Niivue } from './vendor/niivue-0.69.0.esm.js'
 
@@ -812,8 +814,7 @@ export class Viewer {
   // -------------------------------------------------------- crosshair / focus
   focusVoxel(p) {
     if (!this.ready || !this.vol.image) return
-    const [a0, a1, a2] = p.map((v) => Math.round(v))
-    this.nv2.scene.crosshairPos = this.vol.image.convertVox2Frac([a2, a1, a0])
+    this.nv2.scene.crosshairPos = workspaceFrac(this.vol.image, p.map((v) => Math.round(v)))
     this.nv2.drawScene()
     this._readoutFromCrosshair()
   }
@@ -821,7 +822,7 @@ export class Viewer {
   focusObject(id) {
     const m = this.meshes.get(`o${id}`)
     if (m && this.vol.image) {
-      this.nv2.scene.crosshairPos = this.vol.image.convertMM2Frac(m.center)
+      this.nv2.scene.crosshairPos = this.vol.image.convertMM2Frac(m.center, true) // slice mm, as the readout
       this.nv2.drawScene()
       this._readoutFromCrosshair()
       return
@@ -848,8 +849,7 @@ export class Viewer {
 
   _onLocation(loc) {
     if (!this.meta || !loc.values?.length) return
-    const vox = loc.values[0].vox.map((v) => Math.round(v))
-    const p = [vox[2], vox[1], vox[0]]
+    const p = workspaceIndex(this.vol.image, loc.values[0].vox)
     const value = loc.values[0].value
     const objIdx = this.nv2.volumes.indexOf(this.vol.objects)
     const id = objIdx >= 0 ? Math.round(loc.values[objIdx]?.value ?? 0) : 0
