@@ -226,8 +226,9 @@ names (or 30 minutes) and tries that image again; `--stop-on-limit` stops instea
 image three times; `summary` then reports the spread between repeats.
 
 The agents run headless and work through their tools, including a Python tool that runs with your user
-rights (`--python guarded` limits it to computations). Codex reads the skill through its shell; Claude Code
-may also search the web. Claude Code and Codex take a few minutes per image, so a track takes about an
+rights (`--python guarded` limits it to computations). Codex reads the skill through its shell, which `run.py`
+sets to Codex's `workspace-write` sandbox (the run folder, no network); where that sandbox cannot start, Codex
+asks to run the command outside it and an automatic reviewer decides. Claude Code may also search the web. Claude Code and Codex take a few minutes per image, so a track takes about an
 hour and uses your subscription or API key accordingly. Open models on vLLM can take ten times as
 long. `--max-minutes` stops an agent that runs too long. For long unattended runs, `--max-retries N` gives
 up on an image after N failed retries and goes on (the image stays unscored), and `--pause-file F` holds every

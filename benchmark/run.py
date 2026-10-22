@@ -65,9 +65,8 @@ TOOL_PREFIX = "mcp__plugin_nninteractive_nninteractive__"
 AGENT_TRACKS = ("unguided", "guided")
 TRACKS = (*AGENT_TRACKS, "point", *(f"oracle-{k}" for k in oracle.KINDS), "voxtell")
 INSTRUCTIONS = (
-    "You segment images with the nninteractive tools. Before the first nninteractive tool call, {load} the "
-    "nninteractive-segmentation skill and follow it. Work autonomously: there is no human to answer questions "
-    "during the run."
+    "You segment images with the nninteractive tools. Before the first nninteractive tool call, {load} and "
+    "follow it. Work autonomously: there is no human to answer questions during the run."
 )
 
 
@@ -111,7 +110,8 @@ def claude_cmd(prompt: str, args, run_dir: Path, env: dict) -> list:
         "claude", "-p", prompt,
         "--plugin-dir", str(plugin), "--add-dir", str(plugin),
         "--model", args.model, "--effort", args.effort,
-        "--append-system-prompt", INSTRUCTIONS.format(load="load the nninteractive:"),
+        "--append-system-prompt",
+        INSTRUCTIONS.format(load="load the nninteractive:nninteractive-segmentation skill"),
         "--permission-mode", "dontAsk",
         "--allowedTools", f"{TOOL_PREFIX}*", "Skill", "Read", "ToolSearch", "Agent", "WebSearch",
         # The agent works only through its tools: no shell, no file writes.
@@ -135,13 +135,18 @@ def codex_cmd(prompt: str, args, run_dir: Path) -> list:
     m = "mcp_servers.nninteractive"
     return [
         "codex", "exec", "--json", "--skip-git-repo-check", "-m", args.model,
+        # The shell (Codex reads the skill with it) runs sandboxed in the run folder without network. Where
+        # the sandbox cannot start (bwrap without user namespaces), Codex asks to run the command outside it
+        # and an automatic reviewer decides. Pinned so that the user's Codex config does not change the run.
+        "-s", "workspace-write",
+        "-c", 'approval_policy="on-request"', "-c", 'approvals_reviewer="auto_review"',
         "-c", f"model_reasoning_effort={json.dumps(args.effort)}",
         "-c", f"{m}.command={json.dumps(sys.executable)}",
         "-c", f"{m}.args={json.dumps(mcp_args)}",
         "-c", f"{m}.env={{{', '.join(f'{k} = {json.dumps(v)}' for k, v in env.items())}}}",
         "-c", f'{m}.default_tools_approval_mode="approve"',
         "-c", f"{m}.startup_timeout_sec=300", "-c", f"{m}.tool_timeout_sec=1800",
-        f"{INSTRUCTIONS.format(load='read')}\n\n{prompt}",
+        f"{INSTRUCTIONS.format(load='read the nninteractive-segmentation skill')}\n\n{prompt}",
     ]  # fmt: skip
 
 
