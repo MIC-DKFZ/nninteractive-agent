@@ -1,4 +1,16 @@
-# nninteractive-agent
+# nnInteractive Agent
+
+**Say what to segment. The agent does the rest.**
+
+[![arXiv](https://img.shields.io/badge/arXiv-2610.31080-b31b1b.svg)](https://arxiv.org/abs/2610.31080)
+
+<p align="center">
+  <img src="assets/nninteractive-agent-hero.gif" width="100%" alt="The web demo on a CT scan of a packed
+  suitcase: the request 'Segment the snorkel and the flashlight.', the agent searching the bag, and both
+  objects segmented and shown in 3D.">
+</p>
+<p align="center"><sub>The web demo on a CT scan of a packed suitcase, sped up. Image provided by Smiths
+Detection.</sub></p>
 
 [nnInteractive](https://github.com/MIC-DKFZ/nnInteractive) as a tool for AI agents. Tell your agent
 in plain text what to segment ("segment every rib individually and save the result"). The agent
@@ -25,8 +37,9 @@ about as good as simulated prompts placed with the reference mask, at the same n
 0.54: it does well on standard radiology targets and fails on the leg muscles, the foot bones and
 the animals.
 
-**Technical report:** *nnInteractive Agent: General-Purpose AI Agents as 3D Image Annotators*,
-arXiv (link follows). It describes the tools and the skill and evaluates them on the benchmark.
+**Technical report:** [*nnInteractive Agent: General-Purpose AI Agents as 3D Image
+Annotators*](https://arxiv.org/abs/2610.31080) (arXiv, 2026). It describes the tools and the skill
+and evaluates them on the benchmark.
 
 nnInteractive itself runs on your machine (a CUDA GPU is strongly recommended) or on an
 `nninteractive-server` on a GPU machine elsewhere.
@@ -385,6 +398,7 @@ estimate to `new_object`, and coordinates stay at full resolution.
 - `benchmark/`: a benchmark on public images, built from the original sources (`prepare.py`), and
   its runner (`run.py`); see [benchmark/README.md](benchmark/README.md)
 - `tests/`: unit tests (`pytest`, no GPU or LLM needed)
+- `assets/`: the animation at the top of this README
 
 ## Development
 
@@ -408,7 +422,7 @@ libraries keep their own licenses (`src/nninteractive_agent/web/static/vendor/`)
 If you use this, please cite the report and nnInteractive:
 
 > Isensee, F., Ulrich Harsy, C., Rokuss, M., Hamm, B., Vollmuth, P., & Maier-Hein, K. H. (2026).
-> nnInteractive Agent: General-Purpose AI Agents as 3D Image Annotators. arXiv (link follows).
+> nnInteractive Agent: General-Purpose AI Agents as 3D Image Annotators. https://arxiv.org/abs/2610.31080
 
 > Isensee, F.\*, Rokuss, M.\*, Krämer, L.\*, Dinkelacker, S., Ravindran, A., Stritzke, F., Hamm, B.,
 > Wald, T., Langenberg, M., Ulrich, C., Deissler, J., Floca, R., & Maier-Hein, K. (2025).

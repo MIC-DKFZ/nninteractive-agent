@@ -24,6 +24,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/MIC-DKFZ/nninteractive-agent"
 nnInteractive = "https://github.com/MIC-DKFZ/nnInteractive"
+Paper = "https://arxiv.org/abs/2610.31080"
 
 [project.optional-dependencies]
 # Inference on this machine instead of an nninteractive-server (pulls PyTorch + nnU-Net).
