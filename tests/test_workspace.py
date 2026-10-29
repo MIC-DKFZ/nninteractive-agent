@@ -239,3 +239,37 @@ def test_object_colors_do_not_repeat_in_long_series():
     assert len({object_color(i) for i in range(1, 61)}) == 60
     # 24 ribs: left and right of a level are 12 ids apart and must be told apart
     assert min(np.abs(cols[i] - cols[i + 12]).sum() for i in range(48)) > 0.25
+
+
+def test_import_objects_replace_add_and_edit(ws):
+    ws.new_object("agent's")
+    ws.bbox([5, 5, 5], [5, 10, 10])
+    ws.commit()
+    labels = np.zeros(ws.image.shape, np.uint8)
+    labels[2:4, 0:5, 0:5] = 3
+    labels[6, 20:30, 20:30] = 7
+    r = ws.import_objects(labels, {3: {"name": "liver", "color": "#DD8065"}, 7: {"color": "red"}}, mode="replace")
+    assert "replaced all objects with 2 object(s)" in r.text
+    assert {i: o["name"] for i, o in ws.objects.items()} == {1: "liver", 2: "object 7"}
+    assert ws.objects[1]["voxels"] == 50 and ws.objects[1]["color"] == "#dd8065"
+    assert "color" not in ws.objects[2]  # not #rrggbb: the default color
+    assert (ws.instances == 2).sum() == 100 and (ws.instances > 0).sum() == 150
+    # add: the new object takes the voxels it covers; one covered completely is removed
+    more = np.zeros(ws.image.shape, np.uint16)
+    more[2:4, 0:5, 0:5] = 1
+    more[0, 0, 39] = 2
+    r = ws.import_objects(more, mode="add")
+    assert "added 2 object(s)" in r.text and "removed #1 'liver'" in r.text
+    assert sorted(ws.objects) == [2, 3, 4] and ws.objects[3]["voxels"] == 50
+    # imported objects work like committed ones, and keep their color
+    ws.edit_object(2)
+    assert ws.buffer.sum() == 100
+    ws.discard()
+    ws.import_objects(labels, {7: {"name": "tumor", "color": "#00ff00"}}, mode="add")
+    ws.edit_object("tumor")
+    ws.commit()
+    assert ws.objects[6]["name"] == "tumor" and ws.objects[6]["color"] == "#00ff00"
+    with pytest.raises(AgentError, match="shape"):
+        ws.import_objects(np.zeros((2, 2, 2), np.uint8))
+    with pytest.raises(AgentError, match="integer"):
+        ws.import_objects(np.full(ws.image.shape, 0.5, np.float32))

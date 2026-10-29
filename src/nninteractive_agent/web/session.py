@@ -21,7 +21,7 @@ import numpy as np
 from ..core.io import LoadedImage, load_image
 from ..core.session import model_license
 from ..core.render import CURRENT_COLOR, object_color
-from ..core.workspace import AgentWorkspace
+from ..core.workspace import AgentError, AgentWorkspace
 from . import layers
 from .agent_sdk import AgentEvent, AgentSession, web_host_prompt
 from .llm import Backend, claude_backend
@@ -88,6 +88,7 @@ class WebSession:
         self._pending_calls: list = []
         self._orphans: list = []
         self._running_tasks: set = set()
+        self._agent_notes: list = []  # for the agent with the next message (e.g. an uploaded segmentation)
         self._img_count = 0
         self._image_n = 0
         self._t0 = 0.0
@@ -234,6 +235,42 @@ class WebSession:
         if self.ws is not None:
             await asyncio.to_thread(self.ws.close)
 
+    async def import_objects(self, path: Path, segments: dict, mode: str) -> None:
+        """The user's segmentation (a label map file on the image grid) as objects; the agent hears of
+        it with the next message."""
+        if self.busy:
+            raise UserError("The agent is still working. Stop it first.")
+        if self.ws is None or self.image is None:
+            raise UserError("Open an image first.")
+        if self.attach_task is not None and not self.attach_task.done():
+            try:
+                await self.attach_task
+            except Exception as e:  # noqa: BLE001 - shown to the user
+                raise UserError(f"nnInteractive is not available: {e}") from e
+        self.touch()
+        self.busy = True
+        try:
+            labels = await asyncio.to_thread(load_image, path)
+            _check_same_grid(labels, self.image)
+            ws = self.ws
+
+            def run():
+                with ws.lock:
+                    return ws.import_objects(labels.data, segments, mode)
+
+            try:
+                res = await asyncio.to_thread(run)
+            except AgentError as e:
+                raise UserError(str(e)) from e
+        finally:
+            self.busy = False
+        what = "replaced the objects" if mode == "replace" else "added objects"
+        self._event({"t": "divider", "text": f"Segmentation uploaded: {what}"})
+        self._agent_notes.append(f"[The user uploaded a segmentation, which {res.text.removeprefix('imported a label map: ')}. "
+                                 "Use list_objects to see the current objects.]")  # fmt: skip
+        self.mark_dirty()
+        self._set_status("Segmentation uploaded. Describe what to do with it.")
+
     # ----------------------------------------------------------------- agent
     async def send(self, text: str) -> None:
         text = text.strip()
@@ -264,7 +301,8 @@ class WebSession:
                 self.agent = self.mgr.agent_factory(self.ws, self._on_agent_event, model=self.model, effort=self.effort,
                                                     host_prompt=web_host_prompt(self.ws.python_mode))  # fmt: skip
             self._set_status("The agent is working ...")
-            await self.agent.send(text)
+            notes, self._agent_notes = self._agent_notes, []
+            await self.agent.send("\n".join([*notes, text]))
         except asyncio.CancelledError:
             self._event({"t": "done", "seconds": time.time() - self._t0, "error": True, "text": "cancelled"})
         except Exception as e:  # noqa: BLE001 - surface everything in the chat
@@ -445,7 +483,7 @@ class WebSession:
         ml = self.image_meta is not None and any(self.image_meta.get("orientation") or [])
         vox_ml = float(np.prod(ws.image.spacing)) / 1000.0
         rows = [{"id": i, "name": o["name"], "voxels": o["voxels"], "notes": o.get("notes", ""), "prompts": o.get("prompts", 0),
-                 "color": object_color(i), "ml": round(o["voxels"] * vox_ml, 2) if ml else None}
+                 "color": o.get("color") or object_color(i), "ml": round(o["voxels"] * vox_ml, 2) if ml else None}
                 for i, o in sorted(objects.items())]  # fmt: skip
         msg = {"t": "objects", "objects": rows, "current": current, "current_color": CURRENT_COLOR}
         return patches, {"objects_msg": msg, "objects": objects, "current": current}
@@ -454,7 +492,8 @@ class WebSession:
         if ws.image.is_2d:
             return
         affine = layers.array_to_ras(ws.image)
-        want = {f"o{i}": (o["name"], o["voxels"]) for i, o in snap["objects"].items()}
+        colors = {f"o{i}": o.get("color") or object_color(i) for i, o in snap["objects"].items()}
+        want = {f"o{i}": (o["name"], o["voxels"], colors[f"o{i}"]) for i, o in snap["objects"].items()}
         cur = snap["current"]
         if cur is not None and cur["voxels"] > 0:
             want["current"] = (cur["name"], cur["voxels"], cur["prompts"])
@@ -486,7 +525,7 @@ class WebSession:
                     self._broadcast({"t": "mesh", "key": key, "remove": True})
                 continue
             m = self.meshes.get(key)
-            color = CURRENT_COLOR if key == "current" else object_color(int(key[1:]))
+            color = CURRENT_COLOR if key == "current" else colors[key]
             self.meshes[key] = m = {
                 "v": (m["v"] + 1) if m else 1,
                 "blob": blob,
@@ -594,6 +633,22 @@ class SessionManager:
 
 
 # ------------------------------------------------------------------- helpers
+def _check_same_grid(labels: LoadedImage, image: LoadedImage) -> None:
+    """A label map must be on the image's voxel grid (same shape and, from files, same geometry)."""
+    if labels.shape != image.shape:
+        raise UserError(f"The segmentation has {list(labels.shape)} voxels, the image {list(image.shape)}: "
+                        "export it on the image's grid.")  # fmt: skip
+    a, b = labels.sitk_reference, image.sitk_reference
+    if a is None or b is None:
+        return
+    tol = 1e-3 * min(b.GetSpacing())
+    same = (np.allclose(a.GetSpacing(), b.GetSpacing(), atol=tol) and np.allclose(a.GetOrigin(), b.GetOrigin(), atol=tol)
+            and np.allclose(a.GetDirection(), b.GetDirection(), atol=1e-4))  # fmt: skip
+    if not same:
+        raise UserError("The segmentation is not on the image's grid (spacing, origin or axis directions differ): "
+                        "export it on the image's grid.")  # fmt: skip
+
+
 def _focus_point(tool: str, args: dict, text: str):
     """The voxel the agent just prompted at or looked at (for the viewer's follow mode)."""
     p = None

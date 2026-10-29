@@ -15,6 +15,7 @@ from starlette.websockets import WebSocketDisconnect  # noqa: E402
 from web_fakes import ScriptedAgent, fake_workspace  # noqa: E402
 
 from nninteractive_agent.core.io import LoadedImage  # noqa: E402
+from nninteractive_agent.core.render import object_color  # noqa: E402
 from nninteractive_agent.web import layers  # noqa: E402
 from nninteractive_agent.web.auth import Auth  # noqa: E402
 from nninteractive_agent.web.server import _case, create_app  # noqa: E402
@@ -198,3 +199,39 @@ def test_settings_offer_only_what_the_llm_has(client):
         ws.send_json({"cmd": "settings", "model": "sonnet", "effort": "low"})
         st = _receive_until(ws, lambda e: e["t"] == "state" and e["model"] == "sonnet")
         assert st["effort"] == "low"
+
+
+def test_upload_segmentation_becomes_objects(client, tmp_path):
+    import SimpleITK as sitk
+
+    client.post("/login", data={"password": "pw"}, follow_redirects=False)
+    with client.websocket_connect("/api/ws") as ws:
+        ws.receive_json()
+        client.post("/api/open", json={"case": "c1"})
+        _receive_until(ws, lambda e: e["t"] == "state" and e["ready"])
+        labels = np.zeros((12, 48, 40), np.uint8)
+        labels[4:8, 10:20, 10:20] = 5
+        labels[4:8, 30:40, 10:20] = 9
+        im = sitk.GetImageFromArray(labels)
+        im.SetSpacing((0.8, 0.8, 3.0))  # the case's geometry
+        f = tmp_path / "seg.nrrd"
+        sitk.WriteImage(im, str(f))
+        segments = json.dumps([{"value": 5, "name": "liver"}, {"value": 9, "name": "spleen", "color": "#9d6cb9"}])
+        with open(f, "rb") as fh:
+            r = client.post("/api/objects", files={"file": ("seg.nrrd", fh)}, data={"segments": segments})
+        assert r.json() == {"ok": True}
+        _receive_until(ws, lambda e: e["t"] == "divider" and "Segmentation uploaded" in e["text"])
+        objs = _receive_until(ws, lambda e: e["t"] == "objects" and e["objects"])
+        assert [(o["id"], o["name"], o["voxels"]) for o in objs["objects"]] == [(1, "liver", 400), (2, "spleen", 400)]
+        assert objs["objects"][0]["color"] == object_color(1) and objs["objects"][1]["color"] == "#9d6cb9"
+        # the agent hears of it with the next message
+        ws.send_json({"cmd": "send", "text": "Check them."})
+        text = _receive_until(ws, lambda e: e["t"] == "text")
+        assert "The user uploaded a segmentation, which replaced all objects with 2 object(s)" in text["text"]
+        _receive_until(ws, lambda e: e["t"] == "done")
+        # not on the image's grid
+        im.SetSpacing((1.0, 0.8, 3.0))
+        sitk.WriteImage(im, str(f))
+        with open(f, "rb") as fh:
+            r = client.post("/api/objects", files={"file": ("seg.nrrd", fh)}, data={"mode": "add"})
+        assert r.status_code == 409 and "grid" in r.json()["detail"]

@@ -207,10 +207,9 @@ def create_app(
             raise HTTPException(409, str(e)) from e
         return {"ok": True}
 
-    @app.post("/api/upload")
-    async def upload(request: Request, file: UploadFile = File(...)):
-        s = session_of(request)
-        name = _safe(Path(file.filename or "image").name)
+    async def receive_file(s, file: UploadFile, default_name: str) -> tuple:
+        """(path, name) of an uploaded file, saved in the session's uploads folder."""
+        name = _safe(Path(file.filename or default_name).name)
         if not name.lower().endswith(UPLOAD_SUFFIXES):
             raise HTTPException(415, "Unsupported file type. Use NIfTI, NRRD, MHA, TIFF or PNG/JPG.")
         d = s.dir / "uploads"
@@ -230,12 +229,40 @@ def create_app(
             raise
         finally:
             f.close()
+        return dest, name
+
+    @app.post("/api/upload")
+    async def upload(request: Request, file: UploadFile = File(...)):
+        s = session_of(request)
+        dest, name = await receive_file(s, file, "image")
         try:
             await s.open_image(dest, name)
         except UserError as e:
             raise HTTPException(409, str(e)) from e
         except (ValueError, OSError, RuntimeError) as e:
             raise HTTPException(422, f"Could not read the image: {e}") from e
+        return {"ok": True}
+
+    @app.post("/api/objects")
+    async def upload_objects(request: Request, file: UploadFile = File(...), segments: str = Form("[]"),
+                             mode: str = Form("replace")):  # fmt: skip
+        """The user's segmentation as objects: a label map on the current image's grid. ``segments``:
+        JSON list of {"value", "name", "color"} per label value (color: "#rrggbb"); ``mode``: replace or add."""
+        s = session_of(request)
+        if mode not in ("replace", "add"):
+            raise HTTPException(422, "mode must be 'replace' or 'add'")
+        try:
+            rows = json.loads(segments)
+            by_value = {int(r["value"]): {"name": r.get("name"), "color": r.get("color")} for r in rows}
+        except (ValueError, TypeError, KeyError) as e:
+            raise HTTPException(422, f"segments must be a JSON list of {{value, name, color}}: {e}") from e
+        dest, _name = await receive_file(s, file, "segmentation.nrrd")
+        try:
+            await s.import_objects(dest, by_value, mode)
+        except UserError as e:
+            raise HTTPException(409, str(e)) from e
+        except (ValueError, OSError, RuntimeError) as e:
+            raise HTTPException(422, f"Could not read the segmentation: {e}") from e
         return {"ok": True}
 
     @app.get("/api/volume/{key}/{name}")

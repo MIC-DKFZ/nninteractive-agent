@@ -241,6 +241,11 @@ ssh -N -L 8443:127.0.0.1:8443 you@gpu-machine
 
   `--examples list.json` takes such a file directly; paths in it are relative to the file and
   may contain `$VARIABLES`. Users can always upload their own image (up to 2 GB).
+- **An existing segmentation** (API, used by the 3D Slicer front end): `POST /api/objects` with a
+  label map on the image's voxel grid (`file`), its segments
+  (`segments`: JSON list of `{"value", "name", "color"}`, color as `#rrggbb`, shown in the viewers) and `mode` (`replace`, the default, or
+  `add`) makes each label an object, so the agent can edit or discuss a segmentation it did not
+  make. The agent is told with the next message.
 - **Sharing it on a network:** `--host 0.0.0.0` serves the demo to the network over HTTPS with a
   self-signed certificate (`--certfile`/`--keyfile` for a real one; `--insecure-http` only behind
   a proxy that terminates TLS) and a password. The password is in
