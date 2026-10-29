@@ -248,10 +248,12 @@ def test_import_objects_replace_add_and_edit(ws):
     labels = np.zeros(ws.image.shape, np.uint8)
     labels[2:4, 0:5, 0:5] = 3
     labels[6, 20:30, 20:30] = 7
-    r = ws.import_objects(labels, {3: {"name": "liver", "color": "#DD8065"}, 7: {"color": "red"}}, mode="replace")
+    r = ws.import_objects(labels, {3: {"name": "liver", "color": "#DD8065", "notes": "from Slicer"}, 7: {"color": "red"}},
+                          mode="replace")  # fmt: skip
     assert "replaced all objects with 2 object(s)" in r.text
     assert {i: o["name"] for i, o in ws.objects.items()} == {1: "liver", 2: "object 7"}
     assert ws.objects[1]["voxels"] == 50 and ws.objects[1]["color"] == "#dd8065"
+    assert ws.objects[1]["notes"] == "from Slicer"
     assert "color" not in ws.objects[2]  # not #rrggbb: the default color
     assert (ws.instances == 2).sum() == 100 and (ws.instances > 0).sum() == 150
     # add: the new object takes the voxels it covers; one covered completely is removed

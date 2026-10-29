@@ -436,7 +436,7 @@ class AgentWorkspace:
 
     def import_objects(self, labels: np.ndarray, segments: dict | None = None, mode: str = "replace") -> Result:
         """Objects from a label map on the image grid (e.g. the user's existing segmentation): each label
-        value becomes an object. ``segments``: label value -> {"name", "color"} (color: "#rrggbb", kept for
+        value becomes an object. ``segments``: label value -> {"name", "color", "notes"} (color: "#rrggbb", kept for
         display in the user's viewers; the agent's views use their own colors). ``mode``: ``"replace"``
         (the label map becomes all objects) or ``"add"`` (new objects next to the existing ones; they take
         the voxels they cover). An open object is discarded first."""
@@ -467,7 +467,8 @@ class AgentWorkspace:
             oid = self._next_id
             self._next_id += 1
             lut[v] = oid
-            self.objects[oid] = {"name": str(seg.get("name") or f"object {v}"), "voxels": 0, "notes": "", "prompts": 0}
+            self.objects[oid] = {"name": str(seg.get("name") or f"object {v}"), "voxels": 0,
+                                 "notes": str(seg.get("notes") or ""), "prompts": 0}  # fmt: skip
             color = str(seg.get("color") or "")
             if re.fullmatch(r"#[0-9a-fA-F]{6}", color):
                 self.objects[oid]["color"] = color.lower()

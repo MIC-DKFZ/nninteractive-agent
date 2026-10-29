@@ -216,7 +216,7 @@ def test_upload_segmentation_becomes_objects(client, tmp_path):
         im.SetSpacing((0.8, 0.8, 3.0))  # the case's geometry
         f = tmp_path / "seg.nrrd"
         sitk.WriteImage(im, str(f))
-        segments = json.dumps([{"value": 5, "name": "liver"}, {"value": 9, "name": "spleen", "color": "#9d6cb9"}])
+        segments = json.dumps([{"value": 5, "name": "liver"}, {"value": 9, "name": "spleen", "color": "#9d6cb9", "notes": "edited"}])
         with open(f, "rb") as fh:
             r = client.post("/api/objects", files={"file": ("seg.nrrd", fh)}, data={"segments": segments})
         assert r.json() == {"ok": True}
@@ -224,6 +224,7 @@ def test_upload_segmentation_becomes_objects(client, tmp_path):
         objs = _receive_until(ws, lambda e: e["t"] == "objects" and e["objects"])
         assert [(o["id"], o["name"], o["voxels"]) for o in objs["objects"]] == [(1, "liver", 400), (2, "spleen", 400)]
         assert objs["objects"][0]["color"] == object_color(1) and objs["objects"][1]["color"] == "#9d6cb9"
+        assert objs["objects"][1]["notes"] == "edited"
         # the agent hears of it with the next message
         ws.send_json({"cmd": "send", "text": "Check them."})
         text = _receive_until(ws, lambda e: e["t"] == "text")
