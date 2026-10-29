@@ -483,7 +483,7 @@ class WebSession:
         ml = self.image_meta is not None and any(self.image_meta.get("orientation") or [])
         vox_ml = float(np.prod(ws.image.spacing)) / 1000.0
         rows = [{"id": i, "name": o["name"], "voxels": o["voxels"], "notes": o.get("notes", ""), "prompts": o.get("prompts", 0),
-                 "color": o.get("color") or object_color(i), "ml": round(o["voxels"] * vox_ml, 2) if ml else None}
+                 "color": object_color(i), "ml": round(o["voxels"] * vox_ml, 2) if ml else None}
                 for i, o in sorted(objects.items())]  # fmt: skip
         msg = {"t": "objects", "objects": rows, "current": current, "current_color": CURRENT_COLOR}
         return patches, {"objects_msg": msg, "objects": objects, "current": current}
@@ -492,8 +492,7 @@ class WebSession:
         if ws.image.is_2d:
             return
         affine = layers.array_to_ras(ws.image)
-        colors = {f"o{i}": o.get("color") or object_color(i) for i, o in snap["objects"].items()}
-        want = {f"o{i}": (o["name"], o["voxels"], colors[f"o{i}"]) for i, o in snap["objects"].items()}
+        want = {f"o{i}": (o["name"], o["voxels"]) for i, o in snap["objects"].items()}
         cur = snap["current"]
         if cur is not None and cur["voxels"] > 0:
             want["current"] = (cur["name"], cur["voxels"], cur["prompts"])
@@ -525,7 +524,7 @@ class WebSession:
                     self._broadcast({"t": "mesh", "key": key, "remove": True})
                 continue
             m = self.meshes.get(key)
-            color = CURRENT_COLOR if key == "current" else colors[key]
+            color = CURRENT_COLOR if key == "current" else object_color(int(key[1:]))
             self.meshes[key] = m = {
                 "v": (m["v"] + 1) if m else 1,
                 "blob": blob,

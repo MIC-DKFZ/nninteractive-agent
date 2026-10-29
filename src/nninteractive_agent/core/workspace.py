@@ -16,7 +16,6 @@ import contextlib
 import io
 import json
 import os
-import re
 import threading
 import time
 import traceback
@@ -122,7 +121,7 @@ class AgentWorkspace:
         self._low_images: dict = {}  # factors -> downsampled intensities
         self._prev: np.ndarray | None = None  # buffer before the last prompt (for change counts)
         self.instances: np.ndarray | None = None
-        self.objects: dict = {}  # id -> {"name", "voxels", "notes", "prompts"[, "color" of an imported object]}
+        self.objects: dict = {}  # id -> {"name", "voxels", "notes", "prompts"}
         self.current: CurrentObject | None = None
         self._next_id = 1
         self._render_count = 0
@@ -355,7 +354,6 @@ class AgentWorkspace:
             free = mask & (self.instances == 0)
             self.instances[free] = oid
             lost = int(n_mask - free.sum())
-        old = self.objects.get(oid, {})
         self.objects[oid] = {
             "name": cur.name,
             "voxels": int(free.sum()),
@@ -363,8 +361,6 @@ class AgentWorkspace:
             # a re-opened object keeps counting its earlier prompts
             "prompts": len(cur.prompts) + (self.objects[oid]["prompts"] if cur.edit_id is not None else 0),
         }
-        if cur.edit_id is not None and "color" in old:  # a re-opened imported object keeps the user's color
-            self.objects[oid]["color"] = old["color"]
         if cur.factors != scale.FULL:
             self.objects[oid]["factors"] = list(cur.factors)
         if cur.edit_id is None:
@@ -436,8 +432,7 @@ class AgentWorkspace:
 
     def import_objects(self, labels: np.ndarray, segments: dict | None = None, mode: str = "replace") -> Result:
         """Objects from a label map on the image grid (e.g. the user's existing segmentation): each label
-        value becomes an object. ``segments``: label value -> {"name", "color", "notes"} (color: "#rrggbb", kept for
-        display in the user's viewers; the agent's views use their own colors). ``mode``: ``"replace"``
+        value becomes an object. ``segments``: label value -> {"name", "notes"}. ``mode``: ``"replace"``
         (the label map becomes all objects) or ``"add"`` (new objects next to the existing ones; they take
         the voxels they cover). An open object is discarded first."""
         img = self._need_image()
@@ -469,9 +464,6 @@ class AgentWorkspace:
             lut[v] = oid
             self.objects[oid] = {"name": str(seg.get("name") or f"object {v}"), "voxels": 0,
                                  "notes": str(seg.get("notes") or ""), "prompts": 0}  # fmt: skip
-            color = str(seg.get("color") or "")
-            if re.fullmatch(r"#[0-9a-fA-F]{6}", color):
-                self.objects[oid]["color"] = color.lower()
         if values:
             mapped = lut[np.clip(labels, 0, values[-1])]
             covered = mapped > 0

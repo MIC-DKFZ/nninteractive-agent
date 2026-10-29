@@ -248,13 +248,10 @@ def test_import_objects_replace_add_and_edit(ws):
     labels = np.zeros(ws.image.shape, np.uint8)
     labels[2:4, 0:5, 0:5] = 3
     labels[6, 20:30, 20:30] = 7
-    r = ws.import_objects(labels, {3: {"name": "liver", "color": "#DD8065", "notes": "from Slicer"}, 7: {"color": "red"}},
-                          mode="replace")  # fmt: skip
+    r = ws.import_objects(labels, {3: {"name": "liver", "notes": "from Slicer"}}, mode="replace")
     assert "replaced all objects with 2 object(s)" in r.text
     assert {i: o["name"] for i, o in ws.objects.items()} == {1: "liver", 2: "object 7"}
-    assert ws.objects[1]["voxels"] == 50 and ws.objects[1]["color"] == "#dd8065"
-    assert ws.objects[1]["notes"] == "from Slicer"
-    assert "color" not in ws.objects[2]  # not #rrggbb: the default color
+    assert ws.objects[1]["voxels"] == 50 and ws.objects[1]["notes"] == "from Slicer"
     assert (ws.instances == 2).sum() == 100 and (ws.instances > 0).sum() == 150
     # add: the new object takes the voxels it covers; one covered completely is removed
     more = np.zeros(ws.image.shape, np.uint16)
@@ -263,14 +260,10 @@ def test_import_objects_replace_add_and_edit(ws):
     r = ws.import_objects(more, mode="add")
     assert "added 2 object(s)" in r.text and "removed #1 'liver'" in r.text
     assert sorted(ws.objects) == [2, 3, 4] and ws.objects[3]["voxels"] == 50
-    # imported objects work like committed ones, and keep their color
+    # imported objects work like committed ones
     ws.edit_object(2)
     assert ws.buffer.sum() == 100
     ws.discard()
-    ws.import_objects(labels, {7: {"name": "tumor", "color": "#00ff00"}}, mode="add")
-    ws.edit_object("tumor")
-    ws.commit()
-    assert ws.objects[6]["name"] == "tumor" and ws.objects[6]["color"] == "#00ff00"
     with pytest.raises(AgentError, match="shape"):
         ws.import_objects(np.zeros((2, 2, 2), np.uint8))
     with pytest.raises(AgentError, match="integer"):

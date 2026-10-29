@@ -15,7 +15,6 @@ from starlette.websockets import WebSocketDisconnect  # noqa: E402
 from web_fakes import ScriptedAgent, fake_workspace  # noqa: E402
 
 from nninteractive_agent.core.io import LoadedImage  # noqa: E402
-from nninteractive_agent.core.render import object_color  # noqa: E402
 from nninteractive_agent.web import layers  # noqa: E402
 from nninteractive_agent.web.auth import Auth  # noqa: E402
 from nninteractive_agent.web.server import _case, create_app  # noqa: E402
@@ -216,14 +215,13 @@ def test_upload_segmentation_becomes_objects(client, tmp_path):
         im.SetSpacing((0.8, 0.8, 3.0))  # the case's geometry
         f = tmp_path / "seg.nrrd"
         sitk.WriteImage(im, str(f))
-        segments = json.dumps([{"value": 5, "name": "liver"}, {"value": 9, "name": "spleen", "color": "#9d6cb9", "notes": "edited"}])
+        segments = json.dumps([{"value": 5, "name": "liver"}, {"value": 9, "name": "spleen", "notes": "edited"}])
         with open(f, "rb") as fh:
             r = client.post("/api/objects", files={"file": ("seg.nrrd", fh)}, data={"segments": segments})
         assert r.json() == {"ok": True}
         _receive_until(ws, lambda e: e["t"] == "divider" and "Segmentation uploaded" in e["text"])
         objs = _receive_until(ws, lambda e: e["t"] == "objects" and e["objects"])
         assert [(o["id"], o["name"], o["voxels"]) for o in objs["objects"]] == [(1, "liver", 400), (2, "spleen", 400)]
-        assert objs["objects"][0]["color"] == object_color(1) and objs["objects"][1]["color"] == "#9d6cb9"
         assert objs["objects"][1]["notes"] == "edited"
         # the agent hears of it with the next message
         ws.send_json({"cmd": "send", "text": "Check them."})

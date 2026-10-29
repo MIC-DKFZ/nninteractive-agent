@@ -247,17 +247,15 @@ def create_app(
     async def upload_objects(request: Request, file: UploadFile = File(...), segments: str = Form("[]"),
                              mode: str = Form("replace")):  # fmt: skip
         """The user's segmentation as objects: a label map on the current image's grid. ``segments``:
-        JSON list of {"value", "name", "color", "notes"} per label value (color: "#rrggbb"); ``mode``: replace
-        or add."""
+        JSON list of {"value", "name", "notes"} per label value; ``mode``: replace or add."""
         s = session_of(request)
         if mode not in ("replace", "add"):
             raise HTTPException(422, "mode must be 'replace' or 'add'")
         try:
             rows = json.loads(segments)
-            by_value = {int(r["value"]): {"name": r.get("name"), "color": r.get("color"), "notes": r.get("notes")}
-                        for r in rows}  # fmt: skip
+            by_value = {int(r["value"]): {"name": r.get("name"), "notes": r.get("notes")} for r in rows}
         except (ValueError, TypeError, KeyError) as e:
-            raise HTTPException(422, f"segments must be a JSON list of {{value, name, color, notes}}: {e}") from e
+            raise HTTPException(422, f"segments must be a JSON list of {{value, name, notes}}: {e}") from e
         dest, _name = await receive_file(s, file, "segmentation.nrrd")
         try:
             await s.import_objects(dest, by_value, mode)
