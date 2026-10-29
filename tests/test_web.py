@@ -134,6 +134,7 @@ def client(tmp_path, monkeypatch):
                          agent_factory=lambda *a, **k: ScriptedAgent(*a, delay=0.0, **k))  # fmt: skip
     app = create_app(mgr, Auth("pw", secret="s" * 64), secure_cookie=False)
     with TestClient(app) as c:
+        c.manager = mgr  # for tests that need a session's state
         yield c
 
 
@@ -234,3 +235,48 @@ def test_upload_segmentation_becomes_objects(client, tmp_path):
         with open(f, "rb") as fh:
             r = client.post("/api/objects", files={"file": ("seg.nrrd", fh)}, data={"mode": "add"})
         assert r.status_code == 409 and "grid" in r.json()["detail"]
+
+
+def _upload_liver(client, tmp_path):
+    import SimpleITK as sitk
+
+    labels = np.zeros((12, 48, 40), np.uint8)
+    labels[4:8, 10:20, 10:20] = 5
+    im = sitk.GetImageFromArray(labels)
+    im.SetSpacing((0.8, 0.8, 3.0))
+    f = tmp_path / "liver.nrrd"
+    sitk.WriteImage(im, str(f))
+    with open(f, "rb") as fh:
+        return client.post("/api/objects", files={"file": ("liver.nrrd", fh)},
+                           data={"segments": json.dumps([{"value": 5, "name": "liver"}])})  # fmt: skip
+
+
+def test_upload_segmentation_resumes_a_paused_session(client, tmp_path):
+    client.post("/login", data={"password": "pw"}, follow_redirects=False)
+    with client.websocket_connect("/api/ws") as ws:
+        ws.receive_json()
+        client.post("/api/open", json={"case": "c1"})
+        _receive_until(ws, lambda e: e["t"] == "state" and e["ready"])
+        s = next(iter(client.manager.sessions.values()))
+        with s.ws.lock:  # an object left open, then paused for inactivity
+            s.ws.new_object("open one")
+            s.ws.bbox([6, 20, 20], [6, 30, 30])
+        client.portal.call(s.pause)
+        assert s.paused and s.ws.session is None
+        assert _upload_liver(client, tmp_path).json() == {"ok": True}
+        assert not s.paused and s.ws.current is None
+        assert [o["name"] for o in s.ws.objects.values()] == ["liver"]
+
+
+def test_upload_note_is_dropped_with_the_image(client, tmp_path):
+    client.post("/login", data={"password": "pw"}, follow_redirects=False)
+    with client.websocket_connect("/api/ws") as ws:
+        ws.receive_json()
+        client.post("/api/open", json={"case": "c1"})
+        _receive_until(ws, lambda e: e["t"] == "state" and e["ready"])
+        assert _upload_liver(client, tmp_path).json() == {"ok": True}
+        client.post("/api/open", json={"case": "c1"})  # a new image before the next message
+        ws.send_json({"cmd": "send", "text": "Segment it."})
+        text = _receive_until(ws, lambda e: e["t"] == "text")
+        assert "uploaded a segmentation" not in text["text"]
+        _receive_until(ws, lambda e: e["t"] == "done")

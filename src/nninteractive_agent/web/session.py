@@ -189,6 +189,7 @@ class WebSession:
             self.ws = self.mgr.workspace_factory(self.mgr.server_spec, self.dir / f"image{self._image_n}")
             self.layers.reset()
             self.meshes, self._mesh_sig, self._objects_msg = {}, {}, None
+            self._agent_notes = []  # they were about the previous image
             self.paused = False
             self.image_meta = {
                 **meta, "key": key, "title": title, "n": self._image_n, "tasks": list(tasks or []),
@@ -242,11 +243,15 @@ class WebSession:
             raise UserError("The agent is still working. Stop it first.")
         if self.ws is None or self.image is None:
             raise UserError("Open an image first.")
-        if self.attach_task is not None and not self.attach_task.done():
-            try:
+        try:
+            if self.paused:  # an open object is discarded through the nnInteractive session
+                await self.resume()
+            elif self.attach_task is not None and not self.attach_task.done():
                 await self.attach_task
-            except Exception as e:  # noqa: BLE001 - shown to the user
-                raise UserError(f"nnInteractive is not available: {e}") from e
+        except UserError:
+            raise
+        except Exception as e:  # noqa: BLE001 - shown to the user
+            raise UserError(f"nnInteractive is not available: {e}") from e
         self.touch()
         self.busy = True
         try:
